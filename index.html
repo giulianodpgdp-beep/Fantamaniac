@@ -342,6 +342,7 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .mv button{width:36px;height:34px;border-radius:8px;border:1.5px solid var(--line);font-size:12px}
 .mv button:disabled{opacity:.3}
 .rrow.bn.out{opacity:.45}
+.role.rmb{font-size:14px;padding:0 7px;min-width:42px;white-space:nowrap}
 .pitch{position:relative;border-radius:16px;padding:0;border:3px solid #e9f5ec;overflow:hidden;background:repeating-linear-gradient(0deg,#2a8a46 0 52px,#2f9a4e 52px 104px);min-height:540px;box-shadow:0 8px 24px rgba(0,0,0,.35)}
 .pitch .mk{position:absolute;inset:0;pointer-events:none}
 .pitch .mk i{position:absolute;border:2px solid rgba(255,255,255,.7);display:block}
@@ -1095,13 +1096,14 @@ function renderWaiting(){
   };
 }
 
+const rb=(p,mant)=>mant&&p.rm?`<span class="role ${p.role} rmb">${p.rm.replace(/;/g,' ')}</span>`:`<span class="role ${p.role}">${p.role}</span>`;
 function rosterHTML(){
   const me=meSeat(); if(!me) return '';
   const mine=POOL.filter(p=>p.owner_seat===me.seat);
   const rows=[], mant=('F' in me.need);
-  const tag=p=>`${p.rm&&mant?` <small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?` <small class="tm">${p.team}</small>`:''}`;
+  const tag=p=>`${p.team?` <small class="tm">${p.team}</small>`:''}`;
   for(const r of ['P','D','C','A']){
-    mine.filter(p=>p.role===r).forEach(p=>rows.push(`<div class="rrow"><span class="role ${r}">${r}</span>${p.name}${tag(p)}<span class="p">${p.price}</span></div>`));
+    mine.filter(p=>p.role===r).forEach(p=>rows.push(`<div class="rrow">${rb(p,mant)}${p.name}${tag(p)}<span class="p">${p.price}</span></div>`));
     if(!mant) for(let k=0;k<(me.need[r]||0);k++) rows.push(`<div class="rrow empty"><span class="role ${r}">${r}</span>da acquistare</div>`);
   }
   if(mant){
@@ -1120,7 +1122,7 @@ function pickList(me){
 }
 function pickRowsHTML(me,list){
   if(!list.length) return '<p class="dim" style="padding:10px">Nessun calciatore trovato.</p>';
-  return list.map(p=>`<button class="prow" data-pick="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${(p.rm&&('F' in me.need))?`<small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.q}</span></button>`).join('');
+  return list.map(p=>`<button class="prow" data-pick="${p.pid}">${rb(p,'F' in me.need)}<span class="nm">${p.name}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.q}</span></button>`).join('');
 }
 function bindPick(){
   $app.querySelectorAll('[data-pick]').forEach(b=>b.onclick=async()=>{
@@ -1165,7 +1167,7 @@ function renderAuction(){
     else if(me&&p&&slotOf(me.need,p.role)===null) status='Rosa completa in questo ruolo';
     else if(me&&passed.includes(me.seat)) status='Hai passato';
     else status=`In testa: ${sName(leader)}`;
-    if(p) center=`<span class="role ${p.role}">${p.role}</span><div class="pname">${p.name}</div><div class="price" aria-live="polite">${price}</div><div class="msg">${status}</div>`;
+    if(p) center=`${rb(p,R.roles==='mantra')}<div class="pname">${p.name}</div><div class="price" aria-live="polite">${price}</div><div class="msg">${status}</div>`;
     if(!sale) below=`<div class="tbar" id="tbar"><i></i></div><div class="dim" id="ttxt" style="font-size:14px;text-align:center"></div>
       <div class="actions">
         ${[1,5,10].map(n=>`<button class="btn" data-bid="${n}" ${canBid&&price+n<=mb?'':'disabled'}>+${n}</button>`).join('')}
@@ -1226,7 +1228,7 @@ function renderFinished(){
     const me=meSeat();
     if(me){
       STORE.history.unshift({ts:Date.now(), table:'Tavolo '+cfg.code, mode:cfg.mode, scope:'', room:cfg.id, lineup:(cfg.mode!=='super'), credits:cfg.credits, spent:cfg.credits-me.credits,
-        roster:POOL.filter(p=>p.owner_seat===me.seat).map(p=>({name:p.name,role:p.role,price:p.price}))});
+        roles:cfg.roles, roster:POOL.filter(p=>p.owner_seat===me.seat).map(p=>({name:p.name,role:p.role,rm:p.rm,price:p.price}))});
       STORE.history=STORE.history.slice(0,30); saveStore();
     }
     refetchPool().then(()=>{ if(RV){ RV.sig=''; renderRoom(); } });
@@ -1239,7 +1241,7 @@ function renderFinished(){
       const spent=cfg.credits-s.credits;
       return `<div class="res ${s.user_id===ME?'me':''}">
         <h3><span>${s.name}</span><span class="dim" style="font-size:16px;font-family:Barlow,sans-serif">speso ${spent} \u00b7 restano ${s.credits}</span></h3>
-        ${['P','D','C','A'].flatMap(r=>POOL.filter(p=>p.owner_seat===s.seat&&p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
+        ${['P','D','C','A'].flatMap(r=>POOL.filter(p=>p.owner_seat===s.seat&&p.role===r)).map(p=>`<div class="rrow">${rb(p,cfg.roles==='mantra')}${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
       </div>`;
     }).join('')}
     <div style="display:grid;gap:8px;margin-top:18px">${(cfg.mode!=='super'&&meSeat())?'<button class="btn wide" id="lineup">Schiera la formazione</button>':''}<button class="btn wide ${(cfg.mode!=='super')?'ghost':''}" id="again">Torna alla Home</button></div>
@@ -1324,11 +1326,11 @@ async function showLineup(roomId, md, from){
 function renderLineup(){
   const L_=LU, r_=L_.room, n=luStarters().length, spec=luSpec(L_.module), lines=luLines(L_.module), mant=luMant();
   const slot=(i)=>{ const pid=L_.slots[i], p=pid!=null?luBy(pid):null, rl=p?(p.role):spec[i].label[0];
-    return `<button class="pslot ${p?'':'empty'}" data-si="${i}"><span class="kit ${p?p.role:'X'}">${SHIRT}<em>${p?p.role:'+'}</em></span><span class="pn">${p?p.name.split(' ').slice(-1)[0]:(spec[i].label.length>3?spec[i].label.split('/')[0]:spec[i].label)}</span>${spec[i].label.length>1&&mant?`<small class="pl">${spec[i].label}</small>`:''}</button>`; };
+    return `<button class="pslot ${p?'':'empty'}" data-si="${i}"><span class="kit ${p?p.role:'X'}">${SHIRT}<em>${p?(mant&&p.rm?p.rm.split(';')[0]:p.role):'+'}</em></span><span class="pn">${p?p.name.split(' ').slice(-1)[0]:(spec[i].label.length>3?spec[i].label.split('/')[0]:spec[i].label)}</span>${spec[i].label.length>1&&mant?`<small class="pl">${spec[i].label}</small>`:''}</button>`; };
   let idx=0; const rows=lines.map(sz=>{ const items=[]; for(let k=0;k<sz;k++) items.push(slot(idx++)); return `<div class="pline">${items.join('')}</div>`; });
   const pitch=rows.reverse().join('');
   const bn=L_.bench, cut=mant?12:bn.length;
-  const benchRow=(pid,i)=>{ const p=luBy(pid); return `<div class="rrow bn ${i>=cut?'out':''}"><span class="bnn">${i+1}</span><span class="role ${p.role}">${p.role}</span>${p.name}${mant&&p.rm?` <small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="mv"><button data-up="${i}" ${i?'':'disabled'} aria-label="Su">▲</button><button data-dn="${i}" ${i<bn.length-1?'':'disabled'} aria-label="Giù">▼</button></span></div>`; };
+  const benchRow=(pid,i)=>{ const p=luBy(pid); return `<div class="rrow bn ${i>=cut?'out':''}"><span class="bnn">${i+1}</span>${rb(p,mant)}${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="mv"><button data-up="${i}" ${i?'':'disabled'} aria-label="Su">▲</button><button data-dn="${i}" ${i<bn.length-1?'':'disabled'} aria-label="Giù">▼</button></span></div>`; };
   $app.innerHTML = `
     <div class="tb"><button class="back" id="lu-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t">Formazione</h1><span style="width:48px"></span></div>
     <p class="tag" style="margin-bottom:10px">${modeName(r_.mode)} · ${mant?'Mantra':'Classic'} · Tavolo ${r_.code}</p>
@@ -1364,7 +1366,7 @@ function luPick(i){
   const spec=luSpec(LU.module)[i], st=new Set(luStarters()), cur=LU.slots[i], mant=luMant();
   const list=LU.mine.filter(p=>spec.test(p)&&!st.has(p.pid)).sort((a,b)=>(b.price||0)-(a.price||0));
   openSheet(`<h2>${spec.label}</h2>
-    <div class="plist" style="max-height:52vh">${list.map(p=>`<button class="prow" data-take="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${mant&&p.rm?`<small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.price}</span></button>`).join('')||'<p class="dim" style="padding:10px">Nessun altro calciatore adatto a questo posto.</p>'}</div>
+    <div class="plist" style="max-height:52vh">${list.map(p=>`<button class="prow" data-take="${p.pid}">${rb(p,mant)}<span class="nm">${p.name}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.price}</span></button>`).join('')||'<p class="dim" style="padding:10px">Nessun altro calciatore adatto a questo posto.</p>'}</div>
     ${cur!=null?'<button class="btn wide ghost" id="lu-free" style="margin-top:10px">Libera il posto</button>':''}
     <button class="btn wide" data-close style="margin-top:10px">Chiudi</button>`);
   document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
@@ -1443,7 +1445,7 @@ function showHistory(){
   pageShell('Le mie rose',h.map(x=>`<details class="hcard"><summary>
       <div class="hrow"><b>${x.table}</b><span style="color:var(--chip);font-weight:700">${x.spent}/${x.credits}</span></div>
       <div class="hsub">${modeName(x.mode)} \u00b7 ${x.mode==='classic'?'stagione':x.scope} \u00b7 ${new Date(x.ts).toLocaleDateString('it-IT',{day:'numeric',month:'short'})}</div></summary>
-      ${['P','D','C','A'].flatMap(r=>x.roster.filter(p=>p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
+      ${['P','D','C','A'].flatMap(r=>x.roster.filter(p=>p.role===r)).map(p=>`<div class="rrow">${rb(p,x.roles==='mantra')}${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
       ${x.lineup&&x.room?`<button class="btn wide ghost" data-lu="${x.room}" style="margin:10px 0">Formazione</button>`:''}
     </details>`).join(''),'rose');
   document.querySelectorAll('[data-lu]').forEach(b=>b.onclick=(e)=>{ e.preventDefault(); showLineup(b.dataset.lu); });
