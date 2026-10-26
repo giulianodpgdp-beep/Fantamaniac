@@ -407,7 +407,7 @@ function openNameSheet(){
     if(!v){ toast('Scrivi un nome'); return; }
     try{ if(sb) await rpc('set_name',{p_name:v}); }catch(e){ toast(errMsg(e)); return; }
     STORE.name=v; saveStore(); closeSheet();
-    if(PENDING_CODE){ const c=PENDING_CODE; PENDING_CODE=null; joinByCode(c); } else showHome();
+    if(PENDING_CODE){ const c=PENDING_CODE; PENDING_CODE=null; joinByCode(c); } else if(PENDING_LEAGUE){ const c=PENDING_LEAGUE; PENDING_LEAGUE=null; joinLeagueCode(c); } else showHome();
   };
   document.getElementById('sv').onclick=save;
   inp.onkeydown=e=>{ if(e.key==='Enter') save(); };
@@ -483,7 +483,7 @@ const HERO_ART = '<svg width="128" height="128" viewBox="0 0 128 128" aria-hidde
 
 /* ---------- HOME ---------- */
 async function showAste(){
-  stopTick(); stopLobby(); G=null; setNav(true,'aste');
+  stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'aste');
   await fetchOpenRooms();
   const hot = TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   $app.innerHTML = `
@@ -509,72 +509,134 @@ async function showAste(){
 
 
 /* ---------- HOME: DASHBOARD DELLE MIE LEGHE ---------- */
-let LEAGUES=[];
+let LEAGUES=[], NEWLG=null;
 async function fetchLeagues(){
   try{
-    const {data:ss}=await sb.from('seats').select('room_id,seat,credits').eq('user_id',ME);
-    const ids=(ss||[]).map(x=>x.room_id);
+    const {data:mm}=await sb.from('league_members').select('league_id').eq('user_id',ME);
+    const ids=(mm||[]).map(x=>x.league_id);
     if(!ids.length){ LEAGUES=[]; return; }
-    const {data:rr}=await sb.from('rooms').select('*').in('id',ids).in('status',['running','done']).order('created_at',{ascending:false});
-    LEAGUES=(rr||[]).map(r=>({room:r, seat:ss.find(x=>x.room_id===r.id)}));
+    const [a,b,c]=await Promise.all([
+      sb.from('leagues').select('*').in('id',ids).order('created_at',{ascending:false}),
+      sb.from('rooms').select('*').in('league_id',ids),
+      sb.from('league_members').select('league_id').in('league_id',ids)]);
+    const ll=a.data||[], rr=b.data||[], cm=c.data||[];
+    let ss=[]; const rids=rr.map(r=>r.id);
+    if(rids.length){ const {data}=await sb.from('seats').select('room_id,seat,credits').eq('user_id',ME).in('room_id',rids); ss=data||[]; }
+    LEAGUES=ll.map(l=>{ const room=rr.find(r=>r.league_id===l.id)||null;
+      return {lg:l, room, seat:room?(ss.find(x=>x.room_id===room.id)||null):null, members:cm.filter(x=>x.league_id===l.id).length}; });
   }catch(e){}
 }
-const leagueName = r=>modeName(r.mode)+' \u00b7 '+r.code;
 const JERSEY = '<svg class="jersey" viewBox="0 0 200 200" aria-hidden="true"><defs><clipPath id="jc"><path d="M62 22L86 12Q100 30 114 12L138 22L182 54L160 88L140 72V182H60V72L40 88L18 54Z"/></clipPath></defs><g clip-path="url(#jc)"><rect width="200" height="200" fill="#f4f7f2"/>'+[36,66,96,126,156].map(y=>`<rect x="0" y="${y}" width="200" height="12" fill="#2f9e4f"/>`).join('')+'<rect x="0" y="40" width="40" height="60" fill="#2f9e4f" opacity=".0"/><path d="M18 54L40 88L58 78L36 44Z" fill="#2f9e4f"/><path d="M182 54L160 88L142 78L164 44Z" fill="#2f9e4f"/></g><path d="M86 12Q100 34 114 12" fill="none" stroke="#2f9e4f" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="112" r="15" fill="#fff" stroke="#1a6b38" stroke-width="2"/><path d="M100 103l7 5-2.6 8h-8.8l-2.6-8z" fill="#111"/></svg>';
 function teamName(){ return STORE.name ? STORE.name+' FC' : 'La mia squadra'; }
+async function leagueInvite(l){
+  const url=location.origin+location.pathname+'?l='+l.code, text=`Entra nella mia lega "${l.name}" su FantaManiac! Codice lega: ${l.code}`;
+  try{ if(navigator.share){ await navigator.share({title:'FantaManiac',text,url}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
+  try{ await navigator.clipboard.writeText(text+' '+url); toast('Invito copiato'); }catch(e){ toast('Codice lega: '+l.code); }
+}
+function openLeagueSheet(){
+  let roles='classic';
+  const draw=()=>{
+    openSheet(`<h2>Nuova lega</h2><p class="dim" style="margin:6px 0 12px">Crea la lega adesso e fai l\u2019asta quando vuoi, anche un altro giorno. Poi invita gli amici con il codice.</p>
+      <input id="lgn" class="inp" maxlength="24" placeholder="Nome della lega" autocomplete="off" value="${window._lgn||''}">
+      <div class="frow" style="margin:12px 0"><span class="lbl">Ruoli</span><button class="chip ${roles==='classic'?'on':''}" data-lr="classic">Classic</button><button class="chip ${roles==='mantra'?'on':''}" data-lr="mantra">Mantra</button></div>
+      <button class="btn wide" id="lgmk">Crea la lega</button>
+      <h2 style="margin-top:22px">Hai un codice?</h2>
+      <div class="codecard" style="margin-top:8px"><input id="lgc" class="inp" maxlength="5" placeholder="Codice lega" autocapitalize="characters" autocomplete="off"><button class="btn" id="lgjoin">Entra</button></div>`);
+    document.querySelectorAll('#sheet [data-lr]').forEach(b=>b.onclick=()=>{ window._lgn=document.getElementById('lgn').value; roles=b.dataset.lr; draw(); });
+    document.getElementById('lgmk').onclick=async()=>{
+      if(!(await ensureName())) return;
+      const v=document.getElementById('lgn').value.replace(/[<>&"'`]/g,'').trim();
+      if(v.length<2){ toast('Scrivi il nome della lega'); return; }
+      try{ const id=await rpc('create_league',{p_name:v,p_roles:roles}); window._lgn=''; STORE.leagueId=id; saveStore(); closeSheet(); toast('Lega creata'); showHome(); }
+      catch(e){ toast(errMsg(e)); }
+    };
+    document.getElementById('lgjoin').onclick=()=>joinLeagueCode(document.getElementById('lgc').value);
+  };
+  draw();
+}
+async function joinLeagueCode(code){
+  code=(code||'').trim();
+  if(code.length<5){ toast('Il codice lega ha 5 lettere'); return; }
+  if(!(await ensureName())){ PENDING_LEAGUE=code; return; }
+  try{ const id=await rpc('join_league',{p_code:code}); STORE.leagueId=id; saveStore(); closeSheet(); toast('Sei nella lega'); showHome(); }
+  catch(e){ toast(errMsg(e)); }
+}
+let PENDING_LEAGUE=null;
+function openStartAuction(lg){
+  openSheet(`<h2>Avvia l\u2019asta</h2><p class="dim" style="margin:6px 0 12px">Scegli il tipo di asta per la lega ${lg.name} (${lg.roles==='mantra'?'Mantra':'Classic'}).</p>
+    ${MODES.map(m=>`<button class="lrow" data-sm="${m.key}"><span style="flex:1"><b>${m.name}</b><small>${m.desc}</small></span></button>`).join('')}`);
+  document.querySelectorAll('#sheet [data-sm]').forEach(b=>b.onclick=async()=>{
+    const k=b.dataset.sm;
+    if(k==='super' && lg.roles==='mantra'){ toast('Il Superturbo si gioca con i ruoli Classic'); return; }
+    NEWLG=lg; closeSheet(); curMode=k; await showLobby(k); openCreate(k);
+  });
+}
 async function showHome(){
-  stopTick(); stopLobby(); G=null; setNav(true,'home');
+  stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'home');
   await Promise.all([fetchOpenRooms(), fetchLeagues()]);
   const tn=teamName();
-  const lg = LEAGUES.find(l=>l.room.id===STORE.leagueId) || LEAGUES[0];
+  const cur = LEAGUES.find(l=>l.lg.id===STORE.leagueId) || LEAGUES[0];
   const hot = TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   const hotHTML = hot?`<div class="sec-row"><h2>Prossima asta</h2><button class="rules-toggle" id="dall">Vedi le aste</button></div>
     <div class="strip"><div class="t"><b>${modeName(hot.mode)} \u00b7 ${CALL_LABEL[hot.call]||''}</b><span>${hot.seats} persone. ${hot.seats-hot.filled===1?'Manca 1 giocatore':`Mancano ${hot.seats-hot.filled} giocatori`} per partire</span></div><button class="btn" id="hotjoin">Siediti</button></div>`:'';
   let body;
-  if(!lg){
+  if(!cur){
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
       <div class="ttl"><b>Home</b><span class="dim">Dashboard</span></div><span style="width:48px"></span></div>
-      <div class="empty-state" style="margin-top:24px">${IC.league}<h2>Nessuna lega</h2><p class="dim">Ogni asta a cui partecipi diventa una tua lega. Siediti a un tavolo per iniziare.</p><button class="btn wide" id="go" style="margin-top:16px">Vai alle aste</button></div>
+      <div class="empty-state" style="margin-top:24px">${IC.league}<h2>Nessuna lega</h2><p class="dim">Crea una lega con i tuoi amici e fai l\u2019asta quando volete. Oppure entra con un codice, o siediti a un tavolo.</p>
+        <button class="btn wide" id="newlg" style="margin-top:16px">Crea o unisciti a una lega</button>
+        <button class="btn wide ghost" id="go" style="margin-top:10px">Vai alle aste</button></div>
       ${resumeHTML()}${hotHTML}`;
   } else {
-    const r=lg.room, left=lg.seat.credits, spent=r.credits-left, done=r.status==='done', isSuper=r.mode==='super';
-    const act = !done ? `<button class="btn wide" id="dgo">Torna all\u2019asta</button>`
-      : isSuper ? `<p class="note" style="margin:0">Nel Superturbo giocano tutti e 4 i calciatori: non serve la formazione.</p>`
-      : `<button class="btn wide" id="dlu">Inserisci formazione</button>`;
+    const l=cur.lg, r=cur.room, mine=l.owner===ME, mant=l.roles==='mantra';
+    let kp, act;
+    if(!r){
+      kp=[[cur.members,'Membri'],[mant?'Mantra':'Classic','Ruoli'],[l.code,'Codice'],['Da fare','Asta']];
+      act = mine ? `<button class="btn wide" id="dstart">Avvia l\u2019asta</button>`
+        : `<p class="note" style="margin:0">L\u2019asta non \u00e8 ancora stata avviata: la avvia chi ha creato la lega.</p>`;
+    } else {
+      const done=r.status==='done', left=cur.seat?cur.seat.credits:null;
+      kp=[[cur.members,'Membri'],[left!=null?left:'\u2014','Crediti'],[left!=null?r.credits-left:'\u2014','Spesi'],[r.days||'\u2014','Giornate']];
+      if(!done) act = cur.seat ? `<button class="btn wide" id="dgo">Torna all\u2019asta</button>` : (r.status==='open'?`<button class="btn wide" id="djoin">Siediti all\u2019asta</button>`:`<p class="note" style="margin:0">L\u2019asta \u00e8 gi\u00e0 iniziata.</p>`);
+      else if(r.mode==='super') act=`<p class="note" style="margin:0">Nel Superturbo giocano tutti e 4 i calciatori: non serve la formazione.</p>`;
+      else if(!cur.seat) act=`<p class="note" style="margin:0">Non hai partecipato all\u2019asta di questa lega.</p>`;
+      else act=`<button class="btn wide" id="dlu">Inserisci formazione</button>`;
+    }
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
-      <div class="ttl"><b>${leagueName(r)}</b><span class="dim">Dashboard</span></div>
+      <div class="ttl"><b>${l.name}</b><span class="dim">Dashboard</span></div>
       <button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button><button class="ibtn" id="dchat" aria-label="Chat">${IC.chat}</button></div>
-    <button class="lsel" id="lsel"><span>${leagueName(r)}</span>${IC.chev}</button>
+    <button class="lsel" id="lsel"><span>${l.name}</span>${IC.chev}</button>
     <section class="stage" aria-label="La mia squadra">
       <div class="tname">${tn}</div>${JERSEY}
-      <div class="sbtns"><button id="dshare" aria-label="Condividi">${IC.share}</button><button id="dset" aria-label="Impostazioni">${IC.gear}</button></div>
+      <div class="sbtns"><button id="dshare" aria-label="Invita gli amici">${IC.share}</button><button id="dset" aria-label="Impostazioni">${IC.gear}</button></div>
       <div class="wm">FANTA<b>MANIAC</b></div>
     </section>
-    <div class="kpis">
-      <div><b>${r.filled}</b><span>Squadre</span></div><div><b>${left}</b><span>Crediti</span></div>
-      <div><b>${spent}</b><span>Spesi</span></div><div><b>${r.days||'\u2014'}</b><span>Giornate</span></div></div>
+    <div class="kpis">${kp.map(k=>`<div><b${String(k[0]).length>5?' style="font-size:22px;padding-top:6px"':''}>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>
     <div style="margin-top:14px">${act}</div>
-    ${resumeHTML()}${hotHTML}
-    <p class="note">Punteggi e classifica arrivano quando colleghiamo i voti della Serie A.</p>`;
+    ${r&&r.status!=='done'&&cur.seat?'':resumeHTML()}${hotHTML}
+    <p class="note">Invita gli amici con il pulsante di condivisione: il codice della lega \u00e8 <b>${l.code}</b>. Punteggi e classifica arrivano quando colleghiamo i voti della Serie A.</p>`;
   }
   $app.innerHTML=body;
   document.getElementById('dmenu').onclick=openMenu;
   const g=id=>document.getElementById(id);
   if(g('dbell')) g('dbell').onclick=()=>toast('Nessuna notifica');
   if(g('dchat')) g('dchat').onclick=()=>toast('Chat di lega: in arrivo');
-  if(g('dshare')) g('dshare').onclick=()=>toast('Condivisione: in arrivo');
+  if(g('dshare')) g('dshare').onclick=()=>leagueInvite(cur.lg);
   if(g('dset')) g('dset').onclick=openNameSheet;
   if(g('go')) g('go').onclick=showAste;
-  if(g('dgo')) g('dgo').onclick=()=>enterRoom(lg.room.id);
-  if(g('dlu')) g('dlu').onclick=()=>showLineup(lg.room.id,1,'home');
+  if(g('newlg')) g('newlg').onclick=openLeagueSheet;
+  if(g('dstart')) g('dstart').onclick=()=>openStartAuction(cur.lg);
+  if(g('dgo')) g('dgo').onclick=()=>enterRoom(cur.room.id);
+  if(g('djoin')) g('djoin').onclick=()=>joinTable(cur.room);
+  if(g('dlu')) g('dlu').onclick=()=>showLineup(cur.room.id,1,'home');
   bindResume();
   if(g('dall')) g('dall').onclick=showAste;
   if(g('hotjoin')) g('hotjoin').onclick=()=>joinTable(hot);
   if(g('lsel')) g('lsel').onclick=()=>{
-    openSheet(`<h2>Le mie leghe</h2>${LEAGUES.map((l,i)=>`<button class="lrow ${l.room.id===lg.room.id?'on':''}" data-lg="${l.room.id}"><span style="flex:1"><b>${leagueName(l.room)}</b><small>${l.room.roles==='mantra'?'Mantra':'Classic'} \u00b7 ${l.room.filled} squadre \u00b7 ${l.room.status==='done'?'asta conclusa':'asta in corso'}</small></span></button>`).join('')}
-      <button class="btn wide ghost" id="newlg" style="margin-top:14px">Nuova lega: partecipa a un\u2019asta</button>`);
+    openSheet(`<h2>Le mie leghe</h2>${LEAGUES.map(x=>`<button class="lrow ${x.lg.id===cur.lg.id?'on':''}" data-lg="${x.lg.id}"><span style="flex:1"><b>${x.lg.name}</b><small>${x.lg.roles==='mantra'?'Mantra':'Classic'} \u00b7 ${x.members} ${x.members===1?'membro':'membri'} \u00b7 ${!x.room?'asta da fare':x.room.status==='done'?'asta conclusa':'asta in corso'}</small></span></button>`).join('')}
+      <button class="btn wide ghost" id="newlg2" style="margin-top:14px">Crea o unisciti a una lega</button>`);
     document.querySelectorAll('#sheet [data-lg]').forEach(b=>b.onclick=()=>{ STORE.leagueId=b.dataset.lg; saveStore(); closeSheet(); showHome(); });
-    document.getElementById('newlg').onclick=()=>{ closeSheet(); showAste(); };
+    document.getElementById('newlg2').onclick=openLeagueSheet;
   };
 }
 
@@ -663,7 +725,8 @@ async function createTable(f){
   if(!(await ensureName())) return false;
   try{
     const id=await rpc('create_table',{p_mode:f.mode,p_private:f.priv,p_roles:f.roles,p_call:f.call,p_seats:f.seats,p_credits:f.credits,p_need:f.need,p_bid_time:f.timer,p_days:f.days});
-    closeSheet(); await enterRoom(id); return true;
+    try{ const lid=await rpc('link_room',{p_room:id,p_league:NEWLG?NEWLG.id:null}); STORE.leagueId=lid; saveStore(); }catch(e){ toast(errMsg(e)); }
+    NEWLG=null; closeSheet(); await enterRoom(id); return true;
   }catch(e){ toast(errMsg(e)); return false; }
 }
 
@@ -744,7 +807,7 @@ async function showLobby(mode){
 /* ---------- CREA TAVOLO ---------- */
 function openCreate(mode){
   const R_=RULES[mode], m=MODES.find(x=>x.key===mode);
-  const f={mode, priv:false, roles:'classic', call:'random', seats:Math.min(8,R_.seats[1]), credits:mode==='super'?300:500, timer:10, days:1,
+  const f={mode, priv:false, roles:(NEWLG?NEWLG.roles:'classic'), call:'random', seats:Math.min(8,R_.seats[1]), credits:mode==='super'?300:500, timer:10, days:1,
            need:R_.need?{...R_.need}:{P:3,D:8,C:8,A:6}};
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,Math.round(+v)||lo));
   const maxRole = r=>Math.max(0,Math.min(12,Math.floor(CAP[r]/f.seats)));
@@ -756,6 +819,7 @@ function openCreate(mode){
     if(r==='mantra') f.need = mode==='turbo'?{P:2,F:16}:{P:3,F:25};
     else f.need = R_.need?{...R_.need}:{P:3,D:8,C:8,A:6};
   };
+  if(NEWLG && NEWLG.roles==='mantra') setRoles('mantra');
   const step=(key,val,lo,hi,suf)=>`<div class="stp"><button data-dec="${key}" aria-label="Meno">−</button><input class="inp stpi" type="number" inputmode="numeric" data-in="${key}" value="${val}" min="${lo}" max="${hi}"><button data-inc="${key}" aria-label="Più">+</button>${suf?`<span class="dim">${suf}</span>`:''}</div>`;
   const draw=()=>{
     const mant=f.roles==='mantra';
@@ -790,7 +854,7 @@ function openCreate(mode){
     const w=sheet.querySelector('.cwrap'); if(w) w.scrollTop=scroll;
     const q=sel=>[...sheet.querySelectorAll(sel)];
     q('[data-priv]').forEach(b=>b.onclick=()=>{ f.priv=b.dataset.priv==='1'; draw(); });
-    q('[data-roles]').forEach(b=>b.onclick=()=>{ setRoles(b.dataset.roles); draw(); });
+    q('[data-roles]').forEach(b=>b.onclick=()=>{ if(NEWLG){ toast('I ruoli sono quelli della lega'); return; } setRoles(b.dataset.roles); draw(); });
     q('[data-call]').forEach(b=>b.onclick=()=>{ f.call=b.dataset.call; draw(); });
     q('[data-days]').forEach(b=>b.onclick=()=>{ f.days=+b.dataset.days; draw(); });
     q('[data-soon]').forEach(b=>b.onclick=()=>toast(b.dataset.soon));
@@ -1332,12 +1396,14 @@ async function boot(){
     const t=await rpc('server_now'); SKEW=new Date(t).getTime()-Date.now();
   }catch(e){ return showNetError(e); }
   await fetchOpenRooms();
+  const lcode=new URLSearchParams(location.search).get('l');
   const code=new URLSearchParams(location.search).get('t');
-  if(code){ history.replaceState(null,'',location.pathname); }
-  if(MYROOM && !code) return enterRoom(MYROOM.id);
+  if(code||lcode){ history.replaceState(null,'',location.pathname); }
+  if(MYROOM && !code && !lcode) return enterRoom(MYROOM.id);
   await showHome();
-  if(!STORE.name){ if(code) PENDING_CODE=code; openNameSheet(); }
+  if(!STORE.name){ if(code) PENDING_CODE=code; if(lcode) PENDING_LEAGUE=lcode; openNameSheet(); }
   else if(code) joinByCode(code);
+  else if(lcode) joinLeagueCode(lcode);
 }
 
 /* ---------- SCHEDE: COME FUNZIONA / ROSE / CLASSIFICA / PROFILO ---------- */
