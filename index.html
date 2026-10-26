@@ -555,7 +555,7 @@ const CALL_LABEL = {random:'Random', chiamata:'A chiamata', draft:'Draft'};
 const CALL_INFO = {
   random:'Il calciatore viene estratto a sorte. Chi ha il turno apre l\u2019offerta a 1 credito, poi tutti possono rilanciare.',
   chiamata:'A turno ognuno chiama il calciatore che vuole, apre a 1 credito e poi si rilancia.',
-  draft:'Si sceglie a turno, senza rilanci. Arriva presto.'
+  draft:'A turno ognuno sceglie un calciatore, che è subito suo: niente rilanci. Dal secondo giro sceglie per primo chi ha la rosa meno costosa.'
 };
 const ROLE_NAME_LONG = {P:'portieri',D:'difensori',C:'centrocampisti',A:'attaccanti'};
 // per ogni tipo di asta: limiti scelti insieme
@@ -643,8 +643,8 @@ function tableRules(t){
     `${t.max_seats} giocatori, ${t.credits} crediti a testa`,
     `Rosa da ${total} calciatori: ${t.need.P} portieri, ${t.need.D} difensori, ${t.need.C} centrocampisti, ${t.need.A} attaccanti`,
     CALL_INFO[t.call],
-    `Timer ${t.bid_time} secondi, ogni rilancio lo porta ad almeno 4`,
-    'Devi sempre tenere 1 credito per ogni posto ancora vuoto',
+    t.call==='draft'?'Hai 40 secondi per scegliere, poi scelgo io. I crediti non si spendono':`Timer ${t.bid_time} secondi, ogni rilancio lo porta ad almeno 4`,
+    t.call==='draft'?'Il valore di ogni calciatore è quello di listino, riproporzionato ai crediti del tavolo':'Devi sempre tenere 1 credito per ogni posto ancora vuoto',
     'L’asta parte da sola quando tutti i posti sono occupati'
   ];
   if(t.mode==='turbo') r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato: poi la rosa si azzera`);
@@ -661,7 +661,7 @@ function bindTop(onBack,onInfo){
 function openInfo(modeId){
   const m=MODES.find(x=>x.id===modeId);
   openSheet(`<h2>${m.name}</h2><p class="dim" style="margin:6px 0 10px">${m.desc}</p>
-    ${['random','chiamata'].map(c=>`<div class="gloss"><b>${CALL_LABEL[c]}</b><span>${CALL_INFO[c]}</span></div>`).join('')}
+    ${['random','chiamata','draft'].map(c=>`<div class="gloss"><b>${CALL_LABEL[c]}</b><span>${CALL_INFO[c]}</span></div>`).join('')}
     <button class="btn wide" data-close style="margin-top:14px">Chiudi</button>`);
   document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
 }
@@ -681,7 +681,7 @@ async function showLobby(mode){
     <button class="btn wide quick" id="mktable">Crea un tavolo</button>
     <button class="btn wide ghost" id="quick" style="margin-bottom:12px">Siediti a un tavolo aperto</button>
     <div class="filters">
-      <div class="frow"><span class="lbl">Tipo</span><button class="chip ${L.call==='all'?'on':''}" data-fc="all">Tutti</button><button class="chip ${L.call==='random'?'on':''}" data-fc="random">Random</button><button class="chip ${L.call==='chiamata'?'on':''}" data-fc="chiamata">A chiamata</button></div>
+      <div class="frow"><span class="lbl">Tipo</span><button class="chip ${L.call==='all'?'on':''}" data-fc="all">Tutti</button><button class="chip ${L.call==='random'?'on':''}" data-fc="random">Random</button><button class="chip ${L.call==='chiamata'?'on':''}" data-fc="chiamata">A chiamata</button><button class="chip ${L.call==='draft'?'on':''}" data-fc="draft">Draft</button></div>
       <div class="frow"><span class="lbl">Mostra</span><button class="chip ${L.hideFull?'on':''}" data-hide>Solo tavoli con posti liberi</button></div>
     </div>
     <div class="ttable" id="ttable"><div class="empty-l">Carico i tavoli…</div></div>
@@ -723,10 +723,10 @@ function openCreate(mode){
       <div class="cf"><span class="lbl">Visibilità</span><div class="frow"><button class="chip ${!f.priv?'on':''}" data-priv="0">Pubblico</button><button class="chip ${f.priv?'on':''}" data-priv="1">Privato</button></div>
         <p class="dim cn">${f.priv?'Non compare nell’elenco: entra chi ha il codice.':'Compare nell’elenco: chiunque può sedersi.'}</p></div>
       <div class="cf"><span class="lbl">Ruoli</span><div class="frow"><button class="chip on" data-roles="classic">Classic</button><button class="chip off" data-soon="Ruoli Mantra: in arrivo">Mantra · presto</button></div></div>
-      <div class="cf"><span class="lbl">Chiamata</span><div class="frow"><button class="chip ${f.call==='random'?'on':''}" data-call="random">Random</button><button class="chip ${f.call==='chiamata'?'on':''}" data-call="chiamata">A chiamata</button><button class="chip off" data-soon="Draft: in arrivo">Draft · presto</button></div>
+      <div class="cf"><span class="lbl">Chiamata</span><div class="frow"><button class="chip ${f.call==='random'?'on':''}" data-call="random">Random</button><button class="chip ${f.call==='chiamata'?'on':''}" data-call="chiamata">A chiamata</button><button class="chip ${f.call==='draft'?'on':''}" data-call="draft">Draft</button></div>
         <p class="dim cn">${CALL_INFO[f.call]}</p></div>
       <div class="cf"><span class="lbl">Persone (${R_.seats[0]}-${R_.seats[1]})</span>${step('seats',f.seats,R_.seats[0],R_.seats[1])}</div>
-      <div class="cf"><span class="lbl">Crediti a testa (${R_.credits[0]}-${R_.credits[1]})</span>${step('credits',f.credits,R_.credits[0],R_.credits[1])}</div>
+      <div class="cf"><span class="lbl">Crediti a testa (${R_.credits[0]}-${R_.credits[1]})</span>${step('credits',f.credits,R_.credits[0],R_.credits[1])}${f.call==='draft'?'<p class="dim cn">Nel draft i crediti non si spendono: servono solo a dare un valore ai calciatori.</p>':''}</div>
       <div class="cf"><span class="lbl">Timer offerta (3-30 secondi)</span>${step('timer',f.timer,3,30,'s')}</div>
       ${R_.days?`<div class="cf"><span class="lbl">Giornate di validità</span><div class="frow">${[1,2,3].map(n=>`<button class="chip ${f.days===n?'on':''}" data-days="${n}">${n}</button>`).join('')}</div></div>`:''}
       <div class="cf"><span class="lbl">Rosa</span>${rosterHTML}</div>
@@ -975,19 +975,19 @@ function renderAuction(){
   const slots=Array.from({length:R.max_seats},(_,i)=>SEATS.find(s=>s.seat===i)||null);
   const meIdx=Math.max(0,slots.findIndex(s=>s&&s.user_id===ME));
   const total=open({need:R.need});
-  const manual = R.call==='chiamata';
+  const manual = R.call==='chiamata' || R.call==='draft', draft = R.call==='draft';
   const passed = R.passed||[];
   let center='', below='';
   const fresh = soldFresh();
   if(R.phase==='calling' && !fresh){
     const myTurn = me && R.caller_seat===me.seat;
-    center=`<div class="dim" style="font-size:13px">${manual?'Chiamata':'Estrazione'}</div><div class="pname">${!manual?'a sorte':myTurn?'Tocca a te':sName(R.caller_seat)}</div>`;
+    center=`<div class="dim" style="font-size:13px">${draft?'Draft':manual?'Chiamata':'Estrazione'}</div><div class="pname">${!manual?'a sorte':myTurn?'Tocca a te':sName(R.caller_seat)}</div>`;
     if(myTurn && manual){
       const roles=['P','D','C','A'].filter(r=>(me.need[r]||0)>0);
       if(!PICK_ROLE || !roles.includes(PICK_ROLE)) PICK_ROLE=roles[0];
       const list=POOL.filter(p=>p.role===PICK_ROLE&&p.owner_seat==null).sort((a,b)=>b.q-a.q);
       below=`<div class="panel">
-        <p class="dim">Scegli un giocatore: l\u2019offerta parte da 1 credito a tuo nome. Hai pochi secondi, poi scelgo io.</p>
+        <p class="dim">${draft?'Scegli un giocatore: è subito tuo, senza rilanci. Hai pochi secondi, poi scelgo io.':'Scegli un giocatore: l’offerta parte da 1 credito a tuo nome. Hai pochi secondi, poi scelgo io.'}</p>
         <div class="tabs">${roles.map(r=>`<button class="tab ${r===PICK_ROLE?'on':''}" data-role="${r}">${ROLE_NAME[r]}</button>`).join('')}</div>
         <div class="plist">${list.map(p=>`<button class="prow" data-pick="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.q}</span></button>`).join('')}</div>
         <p class="msg">Il numero a destra \u00e8 la quotazione di riferimento.</p>
@@ -1001,7 +1001,7 @@ function renderAuction(){
     const canBid = !sale && me && p && (me.need[p.role]||0)>0 && !passed.includes(me.seat) && R.cur_leader!==me.seat;
     const mb=me?maxBid(me):0;
     let status;
-    if(sale) status=`Venduto a ${sName(leader)}`;
+    if(sale) status=draft?`Scelto da ${sName(leader)}`:`Venduto a ${sName(leader)}`;
     else if(me&&R.cur_leader===me.seat) status='Sei in testa';
     else if(me&&p&&!(me.need[p.role]||0)) status='Rosa completa in questo ruolo';
     else if(me&&passed.includes(me.seat)) status='Hai passato';
@@ -1024,7 +1024,7 @@ function renderAuction(){
     }
     if(fresh && i===R.last_sale.seat) cls.push('lead');
     return {cls:cls.join(' '), av:s.is_bot?'\u2699':s.name[0], name:s.name,
-      sub:R.max_seats>6?`${s.credits}`:`${s.credits} cr \u00b7 ${total-open(s)}/${total}`, dealer:i===R.caller_seat && R.phase==='calling' && !fresh};
+      sub:draft?`${total-open(s)}/${total}`:R.max_seats>6?`${s.credits}`:`${s.credits} cr · ${total-open(s)}/${total}`, dealer:i===R.caller_seat && R.phase==='calling' && !fresh};
   });
   const keepOpen = document.querySelector('details.roster')?.open;
   const sc = document.querySelector('.plist')?.scrollTop||0;
