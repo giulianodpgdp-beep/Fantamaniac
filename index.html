@@ -241,6 +241,8 @@ button:focus-visible{outline:2px solid var(--chip);outline-offset:2px}
 .codebox{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;border-radius:18px;background:var(--card)}
 .codebox .code{font-family:'Barlow Condensed',sans-serif;font-size:40px;letter-spacing:.18em;color:var(--chip);line-height:1}
 .codebox .btn{margin-left:auto}
+.tm{display:block;font-size:12px;font-weight:400;color:var(--chalk-dim)}
+.rrow .tm{display:inline;margin-left:6px}
 /* waiting */
 .wait-seats{display:grid;gap:10px;margin:18px 0}
 .wseat{display:flex;align-items:center;gap:12px;border:1.5px dashed var(--line);border-radius:16px;padding:12px 14px;min-height:56px}
@@ -940,7 +942,7 @@ function rosterHTML(){
   const mine=POOL.filter(p=>p.owner_seat===me.seat);
   const rows=[];
   for(const r of ['P','D','C','A']){
-    mine.filter(p=>p.role===r).forEach(p=>rows.push(`<div class="rrow"><span class="role ${r}">${r}</span>${p.name}<span class="p">${p.price}</span></div>`));
+    mine.filter(p=>p.role===r).forEach(p=>rows.push(`<div class="rrow"><span class="role ${r}">${r}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`));
     for(let k=0;k<(me.need[r]||0);k++) rows.push(`<div class="rrow empty"><span class="role ${r}">${r}</span>da acquistare</div>`);
   }
   return `<details class="roster"><summary>La mia rosa</summary>${rows.join('')}</details>`;
@@ -965,7 +967,7 @@ function renderAuction(){
       below=`<div class="panel">
         <p class="dim">Scegli un giocatore: l\u2019offerta parte da 1 credito a tuo nome. Hai pochi secondi, poi scelgo io.</p>
         <div class="tabs">${roles.map(r=>`<button class="tab ${r===PICK_ROLE?'on':''}" data-role="${r}">${ROLE_NAME[r]}</button>`).join('')}</div>
-        <div class="plist">${list.map(p=>`<button class="prow" data-pick="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}</span><span class="q">${p.q}</span></button>`).join('')}</div>
+        <div class="plist">${list.map(p=>`<button class="prow" data-pick="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.q}</span></button>`).join('')}</div>
         <p class="msg">Il numero a destra \u00e8 la quotazione di riferimento.</p>
       </div>`;
     } else center+=`<p class="msg dim">${manual?'sta scegliendo\u2026':'sorteggio in corso\u2026'}</p>`;
@@ -1048,7 +1050,7 @@ function renderFinished(){
       const spent=cfg.credits-s.credits;
       return `<div class="res ${s.user_id===ME?'me':''}">
         <h3><span>${s.name}</span><span class="dim" style="font-size:16px;font-family:Barlow,sans-serif">speso ${spent} \u00b7 restano ${s.credits}</span></h3>
-        ${['P','D','C','A'].flatMap(r=>POOL.filter(p=>p.owner_seat===s.seat&&p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}<span class="p">${p.price}</span></div>`).join('')}
+        ${['P','D','C','A'].flatMap(r=>POOL.filter(p=>p.owner_seat===s.seat&&p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
       </div>`;
     }).join('')}
     <div style="display:grid;gap:8px;margin-top:18px"><button class="btn wide" id="again">Torna alla Home</button></div>
@@ -1124,7 +1126,7 @@ function showHistory(){
   pageShell('Le mie rose',h.map(x=>`<details class="hcard"><summary>
       <div class="hrow"><b>${x.table}</b><span style="color:var(--chip);font-weight:700">${x.spent}/${x.credits}</span></div>
       <div class="hsub">${modeName(x.mode)} \u00b7 ${x.mode==='classic'?'stagione':x.scope} \u00b7 ${new Date(x.ts).toLocaleDateString('it-IT',{day:'numeric',month:'short'})}</div></summary>
-      ${['P','D','C','A'].flatMap(r=>x.roster.filter(p=>p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}<span class="p">${p.price}</span></div>`).join('')}
+      ${['P','D','C','A'].flatMap(r=>x.roster.filter(p=>p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
     </details>`).join(''),'rose');
 }
 function showRanking(){
