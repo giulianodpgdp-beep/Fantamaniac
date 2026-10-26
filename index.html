@@ -317,6 +317,25 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .res h3{display:flex;justify-content:space-between;font-size:22px}
 .note{margin-top:18px;font-size:13px;color:var(--chalk-dim);border-top:1px solid var(--line);padding-top:12px}
 @media (prefers-reduced-motion:reduce){.btn,.tbar i{transition:none}}
+.cwrap{max-height:78vh;overflow:auto;padding-bottom:6px}
+.cf{margin:14px 0 0}.cf .lbl{display:block;font-size:13px;color:var(--chalk-dim);margin-bottom:6px;min-width:0}
+.cf .cn{font-size:13px;margin:6px 0 0;line-height:1.35}
+.chip.off{opacity:.5;border-style:dashed}
+.stp{display:flex;align-items:center;gap:8px}
+.stp button{width:46px;height:46px;border-radius:12px;border:1.5px solid var(--line);font-size:24px;font-weight:700;flex:none}
+.stp .stpi{width:100px;min-height:46px;text-align:center;padding:0 6px;font-weight:700}
+.flatwrap{margin:8px 0}
+.flatc{border:1.5px solid var(--line);border-radius:20px;background:#0a2a17;padding:14px;text-align:center;margin-bottom:10px}
+.flatc .pname{font-size:26px;margin:4px 0 0}.flatc .price{font-size:60px}
+.seatgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:8px}
+.gseat{position:relative;text-align:center;min-width:0}
+.gseat .av{width:38px;height:38px;margin:0 auto;border-radius:50%;display:grid;place-items:center;background:var(--felt-3);border:2px solid var(--line);font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:19px}
+.gseat.me .av{background:var(--chalk);color:var(--felt-3);border-color:var(--chalk)}
+.gseat.lead .av{border-color:var(--chip);box-shadow:0 0 0 3px rgba(20,201,162,.35)}
+.gseat.out{opacity:.4}.gseat.empty .av{border-style:dashed;background:transparent;color:var(--chalk-dim)}
+.gseat .nm{font-size:11px;font-weight:600;line-height:1.15;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gseat .cr{font-size:11px;color:var(--chip)}
+.gseat .dchip{position:absolute;top:-4px;right:6px;background:var(--chip);color:#052a18;font-size:11px;font-weight:800;border-radius:999px;padding:0 5px}
 </style>
 </head>
 <body>
@@ -397,12 +416,9 @@ let _lid=0;
 const logoSVG=(sz)=>MARK_SVG.replace(/SZ/g,sz).replace(/bc-ID/g,'bc'+(++_lid));
 const LOGO = logoSVG(44);
 const MODES = [
-  {id:'asta-turbo',      name:'Asta Turbo',      ic:'bolt',   g:'g5', desc:'18 calciatori a squadra, valida per una sola giornata.', ready:true, novita:true, key:'turbo'},
-  {id:'asta-superturbo', name:'Asta Superturbo', ic:'target', g:'g6', desc:'Solo 4 calciatori, su una partita o su un giorno di gare.', ready:true, novita:true, key:'super'},
-  {id:'asta-classic',    name:'Asta Classic',    ic:'gavel',  g:'g1', desc:'L\u2019asta di stagione a rialzo, con ruoli P, D, C, A.', ready:true, key:'classic'},
-  {id:'asta-mantra',     name:'Asta Mantra',     ic:'gavel',  g:'g2', desc:'Asta live con i ruoli Mantra: ogni posizione conta.', ready:false},
-  {id:'listone-classic', name:'Listone Classic', ic:'list',   g:'g3', desc:'Scegli la rosa dal listone spendendo i tuoi crediti.', ready:false},
-  {id:'listone-mantra',  name:'Listone Mantra',  ic:'list',   g:'g4', desc:'Il listone con i ruoli Mantra.', ready:false}
+  {id:'asta-turbo',      name:'Asta Turbo',      ic:'bolt',   g:'g5', desc:'18 calciatori a squadra, valida per 1-3 giornate.', ready:true, novita:true, key:'turbo'},
+  {id:'asta-superturbo', name:'Asta Superturbo', ic:'target', g:'g6', desc:'4 calciatori, uno per ruolo, valida per 1-3 giornate.', ready:true, novita:true, key:'super'},
+  {id:'asta-classic',    name:'Asta Classica',   ic:'gavel',  g:'g1', desc:'L\u2019asta di stagione: scegli tu la rosa.', ready:true, key:'classic'}
 ];
 const modeName = k=>(MODES.find(m=>m.key===k)||{}).name||'Asta';
 function setNav(show, active='home'){
@@ -425,11 +441,6 @@ function chipsHTML(active){
 function bindChips(){
   $app.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>openMode(b.dataset.mode));
   const on=$app.querySelector('.mchip.on'); if(on) on.scrollIntoView({inline:'center',block:'nearest'});
-}
-function openMode(id){
-  if(id==='home') return showAste();
-  const m=MODES.find(x=>x.id===id);
-  showVariants(id);
 }
 function headerHTML(){
   return `<div class="hdr"><div class="l">${LOGO}<span class="name">Fanta<b>Maniac</b></span></div>
@@ -515,7 +526,7 @@ async function showHome(){
   document.getElementById('dchat').onclick=()=>toast('Chat di lega: in arrivo');
   document.getElementById('dshare').onclick=()=>toast('Condivisione: in arrivo');
   document.getElementById('dset').onclick=()=>{ STORE.name?openNameSheet():openNameSheet(); };
-  document.getElementById('dnews').onclick=()=>showVariants(lg.news[2]);
+  document.getElementById('dnews').onclick=()=>openMode(lg.news[2]);
   bindResume();
   const dl=document.getElementById('dlast'); if(dl) dl.onclick=showHistory;
   const da=document.getElementById('dall'); if(da) da.onclick=showAste;
@@ -539,30 +550,22 @@ function showSoon(id){
   document.getElementById('gohome').onclick=showAste;
 }
 
-/* ---------- VARIANTI E TAVOLI ---------- */
-const ROSTERS = {std:{P:3,D:8,C:8,A:6}, turbo:{P:2,D:6,C:6,A:4}, super:{P:1,D:1,C:1,A:1}};
-const VSETS = {
-  std:  [['random',8,300],['random',10,500],['chiamata',10,500],['chiamata',12,1000]],
-  turbo:[['random',4,250],['chiamata',4,250],['random',8,350],['chiamata',10,500]],
-  super:[['random',2,40],['chiamata',4,60],['random',6,80],['chiamata',8,100]],
-  list: [['listone',8,300],['listone',10,500],['listone',12,1000]]
-};
-const MODE_CFG = {
-  'asta-turbo':{roster:'turbo',v:'turbo'}, 'asta-superturbo':{roster:'super',v:'super'},
-  'asta-classic':{roster:'std',v:'std'}, 'asta-mantra':{roster:'std',v:'std'},
-  'listone-classic':{roster:'std',v:'list'}, 'listone-mantra':{roster:'std',v:'list'}
-};
-const CALL_LABEL = {random:'Random', chiamata:'A chiamata', listone:'Listone'};
+/* ---------- TAVOLI ---------- */
+const CALL_LABEL = {random:'Random', chiamata:'A chiamata', draft:'Draft'};
 const CALL_INFO = {
   random:'Il calciatore viene estratto a sorte. Chi ha il turno apre l\u2019offerta a 1 credito, poi tutti possono rilanciare.',
   chiamata:'A turno ognuno chiama il calciatore che vuole, apre a 1 credito e poi si rilancia.',
-  listone:'Scegli i calciatori da un elenco con prezzi fissi, senza rilanci.'
+  draft:'Si sceglie a turno, senza rilanci. Arriva presto.'
 };
-const SCOPES_SUPER = ['Una partita','Sabato, 3 partite','Domenica, 4 partite','Anticipo del venerd\u00ec'];
-function variantsFor(modeId){
-  const c=MODE_CFG[modeId], need=ROSTERS[c.roster], total=Object.values(need).reduce((a,b)=>a+b,0);
-  return VSETS[c.v].map(([call,seats,credits])=>({id:`${call}-${seats}-${credits}`,call,seats,credits,need,total}));
-}
+const ROLE_NAME_LONG = {P:'portieri',D:'difensori',C:'centrocampisti',A:'attaccanti'};
+// per ogni tipo di asta: limiti scelti insieme
+const RULES = {
+  turbo:  {seats:[2,20], credits:[100,5000], need:{P:2,D:6,C:6,A:4}, days:true},
+  super:  {seats:[2,50], credits:[100,500],  need:{P:1,D:1,C:1,A:1}, days:true},
+  classic:{seats:[2,20], credits:[100,5000], need:null, days:false}
+};
+// quanti calciatori ci sono per ruolo nel database (limita rosa x persone)
+const CAP = {P:65,D:192,C:195,A:87};
 const idOfKey = k=>MODES.find(m=>m.key===k).id;
 /* ---------- RETE (Supabase) ---------- */
 const SUPABASE_URL = 'https://rjvuhvrjibeutjmfccnz.supabase.co';
@@ -578,7 +581,8 @@ async function fetchOpenRooms(){
   try{
     const {data}=await sb.from('rooms').select('*').eq('status','open').order('created_at',{ascending:false}).limit(200);
     ROOMS=data||[];
-    TABLES=ROOMS.map(r=>({...r, seats:r.max_seats, name:'Tavolo '+r.code, turbo:r.bid_time<=6, scope:''}));
+    const fresh=Date.now()-3*3600*1000;
+    TABLES=ROOMS.filter(r=>!r.is_private && new Date(r.created_at).getTime()>fresh).map(r=>({...r, seats:r.max_seats, name:'Tavolo '+r.code}));
     const {data:ms}=await sb.from('seats').select('room_id').eq('user_id',ME);
     const ids=(ms||[]).map(x=>x.room_id);
     if(ids.length){
@@ -616,34 +620,35 @@ async function joinTable(t){
   try{ await rpc('join_room',{p_room:t.id}); await enterRoom(t.id); }
   catch(e){ toast(errMsg(e)); await fetchOpenRooms(); if(document.getElementById('ttable')) renderRows(); }
 }
-async function createTable(v, bidTime){
-  if(!(await ensureName())) return;
+async function createTable(f){
+  if(!(await ensureName())) return false;
   try{
-    const id=await rpc('create_room',{p_mode:curMode,p_variant:v.id,p_call:v.call,p_seats:v.seats,p_credits:v.credits,p_need:v.need,p_bid_time:bidTime});
-    closeSheet(); await enterRoom(id);
-  }catch(e){ toast(errMsg(e)); }
+    const id=await rpc('create_table',{p_mode:f.mode,p_private:f.priv,p_roles:f.roles,p_call:f.call,p_seats:f.seats,p_credits:f.credits,p_need:f.need,p_bid_time:f.timer,p_days:f.days});
+    closeSheet(); await enterRoom(id); return true;
+  }catch(e){ toast(errMsg(e)); return false; }
 }
 
-/* ---------- LOBBY: VARIANTI E TAVOLI ---------- */
-const L = {sort:'free', dir:1, pace:'all', hideFull:true, sel:null};
-let curMode = 'classic', curVariant = null, lobbyT = null, lobbyChan = null, lobbyDeb = null;
+/* ---------- LOBBY: TAVOLI PUBBLICI ---------- */
+const L = {sort:'free', dir:1, call:'all', hideFull:true, sel:null};
+let curMode = 'classic', lobbyT = null, lobbyChan = null, lobbyDeb = null;
 function stopLobby(){
   clearInterval(lobbyT); lobbyT=null; clearTimeout(lobbyDeb);
   if(lobbyChan && sb){ sb.removeChannel(lobbyChan); } lobbyChan=null;
 }
 function stopTick(){ leaveRoomView(); }
+const needTotal = n=>['P','D','C','A'].reduce((a,r)=>a+((n&&n[r])||0),0);
 function tableRules(t){
-  const total=Object.values(t.need).reduce((a,b)=>a+b,0);
+  const total=needTotal(t.need);
   const r=[
     `${t.max_seats} giocatori, ${t.credits} crediti a testa`,
     `Rosa da ${total} calciatori: ${t.need.P} portieri, ${t.need.D} difensori, ${t.need.C} centrocampisti, ${t.need.A} attaccanti`,
     CALL_INFO[t.call],
     `Timer ${t.bid_time} secondi, ogni rilancio lo porta ad almeno 4`,
     'Devi sempre tenere 1 credito per ogni posto ancora vuoto',
-    'L\u2019asta parte da sola quando tutti i posti sono occupati'
+    'L’asta parte da sola quando tutti i posti sono occupati'
   ];
-  if(t.mode==='turbo') r.push('Vale solo per la prossima giornata di campionato: poi la rosa si azzera');
-  if(t.mode==='super') r.push('Vale solo per una partita o un giorno di gare: poi la rosa si azzera');
+  if(t.mode==='turbo') r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato: poi la rosa si azzera`);
+  if(t.mode==='super') r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato, 4 calciatori: poi la rosa si azzera`);
   return r;
 }
 function topBarHTML(title){
@@ -655,90 +660,99 @@ function bindTop(onBack,onInfo){
 }
 function openInfo(modeId){
   const m=MODES.find(x=>x.id===modeId);
-  const calls=[...new Set(variantsFor(modeId).map(v=>v.call))];
   openSheet(`<h2>${m.name}</h2><p class="dim" style="margin:6px 0 10px">${m.desc}</p>
-    ${calls.map(c=>`<div class="gloss"><b>${CALL_LABEL[c]}</b><span>${CALL_INFO[c]}</span></div>`).join('')}
+    ${['random','chiamata'].map(c=>`<div class="gloss"><b>${CALL_LABEL[c]}</b><span>${CALL_INFO[c]}</span></div>`).join('')}
     <button class="btn wide" data-close style="margin-top:14px">Chiudi</button>`);
   document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
 }
-
-const VF = {mode:null, call:'all', seats:0, free:false};
-async function showVariants(modeId){
-  stopTick(); stopLobby(); setNav(false);
-  const m=MODES.find(x=>x.id===modeId);
-  if(VF.mode!==modeId){ VF.mode=modeId; VF.call='all'; VF.seats=0; VF.free=false; }
-  await fetchOpenRooms();
-  const all=variantsFor(modeId);
-  const calls=[...new Set(all.map(v=>v.call))], seatVals=[...new Set(all.map(v=>v.seats))].sort((a,b)=>a-b);
-  const roomsOf = v=>ROOMS.filter(t=>t.mode===m.key&&t.variant===v.id);
-  const hasFree = v=>m.ready && roomsOf(v).some(t=>t.filled<t.max_seats);
-  const shown=all.filter(v=>(VF.call==='all'||v.call===VF.call)&&(!VF.seats||v.seats===VF.seats)&&(!VF.free||hasFree(v)));
-  const fhtml = `<div class="filters" style="margin-bottom:14px">
-    ${calls.length>1?`<div class="frow"><span class="lbl">Tipo</span><button class="chip ${VF.call==='all'?'on':''}" data-fc="all">Tutti</button>${calls.map(c=>`<button class="chip ${VF.call===c?'on':''}" data-fc="${c}">${CALL_LABEL[c]}</button>`).join('')}</div>`:''}
-    <div class="frow"><span class="lbl">Persone</span><button class="chip ${!VF.seats?'on':''}" data-fs="0">Tutte</button>${seatVals.map(n=>`<button class="chip ${VF.seats===n?'on':''}" data-fs="${n}">${n}</button>`).join('')}</div>
-    ${m.ready?`<div class="frow"><span class="lbl">Mostra</span><button class="chip ${VF.free?'on':''}" data-ff>Con posti liberi</button></div>`:''}
-  </div>`;
-  const nameHTML=m.name.toUpperCase().split(' ').join('<br>');
-  $app.innerHTML = topBarHTML(m.name) + fhtml + (shown.length?'':'<div class="empty-state" style="margin-top:8px"><h2>Nessun tavolo</h2><p class="dim">Nessun tipo di tavolo con questi filtri. Prova a toglierne qualcuno.</p></div>') + shown.map(v=>{
-    const gioc = m.ready ? roomsOf(v).reduce((a,t)=>a+t.filled,0) : '-';
-    return `<button class="vcard" data-v="${v.id}">
-      <div class="vart ${m.g}"><span class="vname">${nameHTML}</span>${IC[m.ic]}</div>
-      <div class="vbody">
-        <div class="vtags">${m.ready?'':'<span class="tg s">In arrivo</span>'}<span class="tg p">${CALL_LABEL[v.call]}</span><span class="tg t">${v.seats} persone</span></div>
-        <div class="vtitle">${v.credits} crediti</div>
-        <div class="vf"><div><small>Ingresso</small><b>Gratis</b></div><div><small>Rosa</small><b>${v.total}</b></div><div><small>Gioc.</small><b>${gioc}</b></div></div>
-      </div></button>`;
-  }).join('');
-  bindTop(showAste, ()=>openInfo(modeId));
-  $app.querySelectorAll('[data-fc]').forEach(b=>b.onclick=()=>{VF.call=b.dataset.fc;showVariants(modeId)});
-  $app.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{VF.seats=+b.dataset.fs;showVariants(modeId)});
-  const ff=$app.querySelector('[data-ff]'); if(ff) ff.onclick=()=>{VF.free=!VF.free;showVariants(modeId)};
-  $app.querySelectorAll('[data-v]').forEach(b=>b.onclick=()=>{
-    if(m.ready) showLobby(m.key,b.dataset.v); else showSoon(modeId);
-  });
+function openMode(id){
+  if(id==='home') return showAste();
+  const m=MODES.find(x=>x.id===id); if(m) showLobby(m.key);
 }
 
-const curTables = ()=>TABLES.filter(t=>t.mode===curMode&&t.variant===curVariant);
-async function showLobby(mode, variantId){
-  if(typeof mode==='string'){ curMode=mode; curVariant=variantId; L.sel=null; L.pace='all'; }
-  if(!curVariant) return showVariants(idOfKey(curMode));
+const curTables = ()=>TABLES.filter(t=>t.mode===curMode&&(L.call==='all'||t.call===L.call));
+async function showLobby(mode){
+  if(typeof mode==='string'){ if(curMode!==mode){ L.call='all'; L.sel=null; } curMode=mode; }
   stopTick(); stopLobby(); setNav(false);
-  const modeId=idOfKey(curMode), v=variantsFor(modeId).find(x=>x.id===curVariant);
+  const modeId=idOfKey(curMode), m=MODES.find(x=>x.id===modeId);
   $app.innerHTML = `
-    ${topBarHTML(CALL_LABEL[v.call]+' \u00b7 '+v.seats+' persone')}
-    <p class="tag" style="margin-bottom:12px">${modeName(curMode)} \u00b7 ${v.credits} crediti \u00b7 rosa da ${v.total} calciatori</p>
-    <button class="btn wide quick" id="quick">Siediti subito</button>
-    <button class="btn wide ghost" id="mktable" style="margin-bottom:12px">Crea un nuovo tavolo</button>
+    ${topBarHTML(m.name)}
+    <p class="tag" style="margin-bottom:12px">${m.desc}</p>
+    <button class="btn wide quick" id="mktable">Crea un tavolo</button>
+    <button class="btn wide ghost" id="quick" style="margin-bottom:12px">Siediti a un tavolo aperto</button>
     <div class="filters">
+      <div class="frow"><span class="lbl">Tipo</span><button class="chip ${L.call==='all'?'on':''}" data-fc="all">Tutti</button><button class="chip ${L.call==='random'?'on':''}" data-fc="random">Random</button><button class="chip ${L.call==='chiamata'?'on':''}" data-fc="chiamata">A chiamata</button></div>
       <div class="frow"><span class="lbl">Mostra</span><button class="chip ${L.hideFull?'on':''}" data-hide>Solo tavoli con posti liberi</button></div>
     </div>
-    <div class="ttable" id="ttable"><div class="empty-l">Carico i tavoli\u2026</div></div>
-    <p class="note">Ingresso gratis con crediti virtuali. Crea un tavolo e manda il codice ai tuoi amici, oppure siediti a uno gi\u00e0 aperto.</p>`;
-  bindTop(()=>showVariants(modeId), ()=>openInfo(modeId));
+    <div class="ttable" id="ttable"><div class="empty-l">Carico i tavoli…</div></div>
+    <p class="note">Ingresso gratis con crediti virtuali. Qui vedi i tavoli pubblici. Un tavolo privato non compare: ci entri solo con il codice.</p>`;
+  bindTop(showAste, ()=>openInfo(modeId));
+  $app.querySelectorAll('[data-fc]').forEach(b=>b.onclick=()=>{L.call=b.dataset.fc;showLobby()});
   $app.querySelector('[data-hide]').onclick=(e)=>{L.hideFull=!L.hideFull;e.currentTarget.classList.toggle('on',L.hideFull);renderRows()};
   document.getElementById('quick').onclick=async()=>{
     await fetchOpenRooms();
     const c=curTables().filter(t=>t.filled<t.max_seats).sort((a,b)=>(b.filled/b.max_seats)-(a.filled/a.max_seats));
-    if(c.length) joinTable(c[0]); else openCreate(v);
+    if(c.length) joinTable(c[0]); else toast('Nessun tavolo aperto: creane uno');
   };
-  document.getElementById('mktable').onclick=()=>openCreate(v);
+  document.getElementById('mktable').onclick=()=>openCreate(curMode);
   await fetchOpenRooms(); renderRows();
   lobbyT=setInterval(async()=>{ await fetchOpenRooms(); renderRows(); },4000);
   lobbyChan=sb.channel('lobby').on('postgres_changes',{event:'*',schema:'public',table:'rooms'},()=>{
     clearTimeout(lobbyDeb); lobbyDeb=setTimeout(async()=>{ await fetchOpenRooms(); renderRows(); },350);
   }).subscribe();
 }
-function openCreate(v){
-  const opts = curMode==='classic'?[8,12,20]:[5,8,12];
-  let sel = opts[1];
-  openSheet(`<h2>Nuovo tavolo</h2>
-    <p class="dim" style="margin:6px 0 12px">${CALL_LABEL[v.call]} \u00b7 ${v.seats} persone \u00b7 ${v.credits} crediti. Dopo averlo creato ricevi un codice da mandare agli amici.</p>
-    <div class="frow"><span class="lbl">Timer</span>${opts.map(n=>`<button class="chip ${n===sel?'on':''}" data-t="${n}">${n} secondi</button>`).join('')}</div>
-    <button class="btn wide" id="mk" style="margin-top:16px">Crea e siediti</button>`);
-  document.querySelectorAll('#sheet [data-t]').forEach(b=>b.onclick=()=>{
-    sel=+b.dataset.t; document.querySelectorAll('#sheet [data-t]').forEach(x=>x.classList.toggle('on',x===b));
-  });
-  document.getElementById('mk').onclick=()=>{ document.getElementById('mk').disabled=true; createTable(v,sel); };
+
+/* ---------- CREA TAVOLO ---------- */
+function openCreate(mode){
+  const R_=RULES[mode], m=MODES.find(x=>x.key===mode);
+  const f={mode, priv:false, roles:'classic', call:'random', seats:Math.min(8,R_.seats[1]), credits:mode==='super'?300:500, timer:10, days:1,
+           need:R_.need?{...R_.need}:{P:3,D:8,C:8,A:6}};
+  const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,Math.round(+v)||lo));
+  const maxRole = r=>Math.max(0,Math.min(12,Math.floor(CAP[r]/f.seats)));
+  const step=(key,val,lo,hi,suf)=>`<div class="stp"><button data-dec="${key}" aria-label="Meno">−</button><input class="inp stpi" type="number" inputmode="numeric" data-in="${key}" value="${val}" min="${lo}" max="${hi}"><button data-inc="${key}" aria-label="Più">+</button>${suf?`<span class="dim">${suf}</span>`:''}</div>`;
+  const draw=()=>{
+    if(!R_.need) ['P','D','C','A'].forEach(r=>{ f.need[r]=Math.min(f.need[r],maxRole(r)); });
+    const tot=needTotal(f.need);
+    const rosterHTML = R_.need
+      ? `<p class="dim" style="margin:0">${tot} calciatori: ${f.need.P} portieri, ${f.need.D} difensori, ${f.need.C} centrocampisti, ${f.need.A} attaccanti. Non si cambia.</p>`
+      : `${['P','D','C','A'].map(r=>`<div class="frow" style="margin:6px 0"><span class="lbl" style="min-width:110px">${ROLE_NAME_LONG[r][0].toUpperCase()+ROLE_NAME_LONG[r].slice(1)}</span>${step('need'+r,f.need[r],r==='P'?1:0,maxRole(r))}</div>`).join('')}
+         <p class="dim" style="margin:4px 0 0">Rosa da ${tot} calciatori (massimo 30). Con ${f.seats} persone il limite per ruolo è quello indicato dal numero massimo.</p>`;
+    const sheet=document.getElementById('sheet');
+    const scroll=sheet.querySelector('.cwrap')?.scrollTop||0;
+    openSheet(`<div class="cwrap"><h2>Crea tavolo · ${m.name}</h2>
+      <div class="cf"><span class="lbl">Visibilità</span><div class="frow"><button class="chip ${!f.priv?'on':''}" data-priv="0">Pubblico</button><button class="chip ${f.priv?'on':''}" data-priv="1">Privato</button></div>
+        <p class="dim cn">${f.priv?'Non compare nell’elenco: entra chi ha il codice.':'Compare nell’elenco: chiunque può sedersi.'}</p></div>
+      <div class="cf"><span class="lbl">Ruoli</span><div class="frow"><button class="chip on" data-roles="classic">Classic</button><button class="chip off" data-soon="Ruoli Mantra: in arrivo">Mantra · presto</button></div></div>
+      <div class="cf"><span class="lbl">Chiamata</span><div class="frow"><button class="chip ${f.call==='random'?'on':''}" data-call="random">Random</button><button class="chip ${f.call==='chiamata'?'on':''}" data-call="chiamata">A chiamata</button><button class="chip off" data-soon="Draft: in arrivo">Draft · presto</button></div>
+        <p class="dim cn">${CALL_INFO[f.call]}</p></div>
+      <div class="cf"><span class="lbl">Persone (${R_.seats[0]}-${R_.seats[1]})</span>${step('seats',f.seats,R_.seats[0],R_.seats[1])}</div>
+      <div class="cf"><span class="lbl">Crediti a testa (${R_.credits[0]}-${R_.credits[1]})</span>${step('credits',f.credits,R_.credits[0],R_.credits[1])}</div>
+      <div class="cf"><span class="lbl">Timer offerta (3-30 secondi)</span>${step('timer',f.timer,3,30,'s')}</div>
+      ${R_.days?`<div class="cf"><span class="lbl">Giornate di validità</span><div class="frow">${[1,2,3].map(n=>`<button class="chip ${f.days===n?'on':''}" data-days="${n}">${n}</button>`).join('')}</div></div>`:''}
+      <div class="cf"><span class="lbl">Rosa</span>${rosterHTML}</div>
+      <button class="btn wide" id="mk" style="margin-top:16px">Crea e siediti</button></div>`);
+    const w=sheet.querySelector('.cwrap'); if(w) w.scrollTop=scroll;
+    const q=sel=>[...sheet.querySelectorAll(sel)];
+    q('[data-priv]').forEach(b=>b.onclick=()=>{ f.priv=b.dataset.priv==='1'; draw(); });
+    q('[data-call]').forEach(b=>b.onclick=()=>{ f.call=b.dataset.call; draw(); });
+    q('[data-days]').forEach(b=>b.onclick=()=>{ f.days=+b.dataset.days; draw(); });
+    q('[data-soon]').forEach(b=>b.onclick=()=>toast(b.dataset.soon));
+    const lim={seats:R_.seats,credits:R_.credits,timer:[3,30]};
+    const setv=(k,v)=>{
+      if(k in lim) f[k]=clamp(v,lim[k][0],lim[k][1]);
+      else { const r=k.slice(-1); f.need[r]=clamp(v,r==='P'?1:0,maxRole(r)); }
+      draw();
+    };
+    const cur=k=>k in lim?f[k]:f.need[k.slice(-1)];
+    q('[data-dec]').forEach(b=>b.onclick=()=>{ const k=b.dataset.dec; setv(k,cur(k)-(k==='credits'?50:1)); });
+    q('[data-inc]').forEach(b=>b.onclick=()=>{ const k=b.dataset.inc; setv(k,cur(k)+(k==='credits'?50:1)); });
+    q('[data-in]').forEach(i=>i.onchange=()=>setv(i.dataset.in,i.value));
+    document.getElementById('mk').onclick=async()=>{
+      const b=document.getElementById('mk'); b.disabled=true;
+      const ok=await createTable(f); if(!ok && document.getElementById('mk')) document.getElementById('mk').disabled=false;
+    };
+  };
+  draw();
 }
 function sortKey(t){
   switch(L.sort){
@@ -791,6 +805,14 @@ function renderRows(){
 // slots: un elemento per posto (null = libero). meIdx: posto di chi guarda (in basso).
 function ovalHTML(center, slots, meIdx, info){
   const n=slots.length;
+  if(n>12){
+    // tanti posti: niente ovale, un riquadro centrale e la griglia dei partecipanti
+    const order=slots.map((s,i)=>i);
+    return `<div class="flatwrap"><div class="flatc">${center}</div><div class="seatgrid">${order.map(i=>{
+      const s=slots[i], d=info(s,i);
+      return `<div class="gseat ${d.cls||''}">${d.dealer?'<span class="dchip" title="Tocca a lui chiamare">C</span>':''}<div class="av">${d.av}</div><div class="nm">${d.name}</div><div class="cr">${d.sub}</div></div>`;
+    }).join('')}</div></div>`;
+  }
   return `<div class="oval-wrap ${n>6?'dense':''}"><div class="oval"></div>${slots.map((s,i)=>{
     const k=(i-meIdx+n)%n, a=k*2*Math.PI/n, x=50+38*Math.sin(a), y=50+41*Math.cos(a), d=info(s,i);
     return `<div class="oseat ${d.cls||''}" style="left:${x}%;top:${y}%">${d.dealer?'<span class="dchip" title="Tocca a lui chiamare">C</span>':''}<div class="av">${d.av}</div><div class="nm">${d.name}</div><div class="cr">${d.sub}</div></div>`;
@@ -922,7 +944,7 @@ function renderWaiting(){
   const isHost=R.host===ME;
   $app.innerHTML = `
     <div class="topbar"><h2>Tavolo ${R.code}</h2><button class="btn ghost" id="leave">Esci</button></div>
-    <p class="dim">${modeName(R.mode)} \u00b7 ${CALL_LABEL[R.call]} \u00b7 ${R.credits} crediti \u00b7 timer ${R.bid_time}s</p>
+    <p class="dim">${modeName(R.mode)} \u00b7 ${R.is_private?'Privato':'Pubblico'} \u00b7 ${CALL_LABEL[R.call]} \u00b7 ${R.credits} crediti \u00b7 timer ${R.bid_time}s${R.mode!=='classic'?` \u00b7 ${R.days} ${R.days===1?'giornata':'giornate'}`:''}</p>
     ${ovalHTML(`<div class="dim" style="font-size:13px">Posti occupati</div><div class="big-count" style="font-size:56px">${SEATS.length}/${R.max_seats}</div>`, slots, meIdx,
       (s,i)=> s ? {cls:s.user_id===ME?'me':'', av:s.is_bot?'\u2699':s.name[0], name:s.name, sub:s.credits+' cr'} : {cls:'empty', av:'?', name:'Libero', sub:'\u00a0'})}
     <div class="codebox"><span class="dim">Codice tavolo</span><b class="code">${R.code}</b><button class="btn" id="invite">Invita gli amici</button></div>
@@ -1104,11 +1126,11 @@ function showHow(){
   ];
   const gl=[
     ['Asta','I calciatori vengono chiamati uno alla volta e vince chi offre di pi\u00f9.'],
-    ['Listone','Scegli i calciatori da un elenco con prezzi fissi, senza rilanci.'],
-    ['Classic','Ruoli semplici: portiere, difensore, centrocampista, attaccante.'],
+        ['Classic','Ruoli semplici: portiere, difensore, centrocampista, attaccante.'],
     ['Mantra','Ruoli specifici, come difensore centrale o esterno.'],
-    ['Turbo','18 calciatori a squadra, valida per una sola giornata.'],
-    ['Superturbo','Solo 4 calciatori, su una partita o su un giorno di gare.']
+    ['Turbo','18 calciatori a squadra, valida da 1 a 3 giornate.'],
+    ['Superturbo','Solo 4 calciatori, uno per ruolo, valida da 1 a 3 giornate.'],
+    ['Tavolo privato','Non compare nell\u2019elenco: ci entra chi ha il codice di 4 lettere.']
   ];
   pageShell('Come funziona',`
     ${steps.map((x,i)=>`<div class="step"><i>${i+1}</i><div><b>${x[0]}</b><div class="dim" style="font-size:14px">${x[1]}</div></div></div>`).join('')}
