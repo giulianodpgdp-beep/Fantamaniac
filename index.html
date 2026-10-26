@@ -1011,7 +1011,24 @@ function rosterHTML(){
   }
   return `<details class="roster"><summary>La mia rosa</summary>${rows.join('')}</details>`;
 }
-let PICK_ROLE=null;
+let PICK_ROLE=null, PICK_Q='';
+const norm = t=>(t||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+function pickList(me){
+  const roles=['P','D','C','A'].filter(r=>slotOf(me.need,r)!==null), q=norm(PICK_Q.trim());
+  const base=POOL.filter(p=>p.owner_seat==null&&(q?roles.includes(p.role):p.role===PICK_ROLE));
+  const list=q?base.filter(p=>norm(p.name).includes(q)||norm(p.team).includes(q)):base;
+  return list.sort((a,b)=>b.q-a.q);
+}
+function pickRowsHTML(me,list){
+  if(!list.length) return '<p class="dim" style="padding:10px">Nessun calciatore trovato.</p>';
+  return list.map(p=>`<button class="prow" data-pick="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${(p.rm&&('F' in me.need))?`<small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.q}</span></button>`).join('');
+}
+function bindPick(){
+  $app.querySelectorAll('[data-pick]').forEach(b=>b.onclick=async()=>{
+    try{ const d=await rpc('call_player',{p_room:R.id,p_pid:+b.dataset.pick}); PICK_Q=''; setRoom(d); scheduleRender(); }
+    catch(e){ toast(errMsg(e)); await refetchPool(); RV.sig=''; renderRoom(); }
+  });
+}
 function renderAuction(){
   const me=meSeat();
   const slots=Array.from({length:R.max_seats},(_,i)=>SEATS.find(s=>s.seat===i)||null);
@@ -1027,11 +1044,12 @@ function renderAuction(){
     if(myTurn && manual){
       const roles=['P','D','C','A'].filter(r=>slotOf(me.need,r)!==null);
       if(!PICK_ROLE || !roles.includes(PICK_ROLE)) PICK_ROLE=roles[0];
-      const list=POOL.filter(p=>p.role===PICK_ROLE&&p.owner_seat==null).sort((a,b)=>b.q-a.q);
+      const list=pickList(me);
       below=`<div class="panel">
         <p class="dim">${draft?'Scegli un giocatore: è subito tuo, senza rilanci. Hai pochi secondi, poi scelgo io.':'Scegli un giocatore: l’offerta parte da 1 credito a tuo nome. Hai pochi secondi, poi scelgo io.'}</p>
-        <div class="tabs">${roles.map(r=>`<button class="tab ${r===PICK_ROLE?'on':''}" data-role="${r}">${ROLE_NAME[r]}</button>`).join('')}</div>
-        <div class="plist">${list.map(p=>`<button class="prow" data-pick="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${(p.rm&&('F' in me.need))?`<small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.q}</span></button>`).join('')}</div>
+        <input id="psearch" class="inp" type="search" placeholder="Cerca un calciatore o una squadra\u2026" value="${PICK_Q.replace(/"/g,'&quot;')}" autocomplete="off" autocapitalize="off" style="margin-bottom:8px;min-height:46px">
+        <div class="tabs" id="ptabs" ${PICK_Q.trim()?'hidden':''}>${roles.map(r=>`<button class="tab ${r===PICK_ROLE?'on':''}" data-role="${r}">${ROLE_NAME[r]}</button>`).join('')}</div>
+        <div class="plist">${pickRowsHTML(me,list)}</div>
         <p class="msg">Il numero a destra \u00e8 la quotazione di riferimento.</p>
       </div>`;
     } else center+=`<p class="msg dim">${manual?'sta scegliendo\u2026':'sorteggio in corso\u2026'}</p>`;
@@ -1069,6 +1087,7 @@ function renderAuction(){
       sub:draft?`${total-open(s)}/${total}`:R.max_seats>6?`${s.credits}`:`${s.credits} cr · ${total-open(s)}/${total}`, dealer:i===R.caller_seat && R.phase==='calling' && !fresh};
   });
   const keepOpen = document.querySelector('details.roster')?.open;
+  const hadSearch = document.activeElement && document.activeElement.id==='psearch', selS = hadSearch?document.activeElement.selectionStart:0;
   const sc = document.querySelector('.plist')?.scrollTop||0;
   $app.innerHTML = `
     <div class="topbar"><h2>Tavolo ${R.code}</h2><button class="btn ghost" id="leave">Esci</button></div>
@@ -1080,10 +1099,16 @@ function renderAuction(){
   const pl=document.querySelector('.plist'); if(pl) pl.scrollTop=sc;
   document.getElementById('leave').onclick=()=>{ leaveRoomView(); toast('Puoi rientrare dalla Home'); showHome(); };
   $app.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{PICK_ROLE=b.dataset.role;RV.sig='';renderRoom()});
-  $app.querySelectorAll('[data-pick]').forEach(b=>b.onclick=async()=>{
-    try{ const d=await rpc('call_player',{p_room:R.id,p_pid:+b.dataset.pick}); setRoom(d); scheduleRender(); }
-    catch(e){ toast(errMsg(e)); await refetchPool(); RV.sig=''; renderRoom(); }
-  });
+  bindPick();
+  const ps_=document.getElementById('psearch');
+  if(ps_){
+    if(hadSearch){ ps_.focus(); try{ ps_.setSelectionRange(selS,selS); }catch(e){} }
+    ps_.oninput=()=>{
+      PICK_Q=ps_.value; const meS=meSeat(); if(!meS) return;
+      const tabs=document.getElementById('ptabs'); if(tabs) tabs.hidden=!!PICK_Q.trim();
+      const pl=$app.querySelector('.plist'); if(pl){ pl.innerHTML=pickRowsHTML(meS,pickList(meS)); pl.scrollTop=0; bindPick(); }
+    };
+  }
   $app.querySelectorAll('[data-bid]').forEach(b=>b.onclick=async()=>{
     try{ const d=await rpc('place_bid',{p_room:R.id,p_amount:R.cur_bid+ +b.dataset.bid}); setRoom(d); scheduleRender(); }
     catch(e){ toast(errMsg(e)); }
