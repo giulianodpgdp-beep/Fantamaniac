@@ -611,14 +611,17 @@ async function showHome(){
   const hot = TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   const hotHTML = hot?`<div class="sec-row"><h2>Prossima asta</h2><button class="rules-toggle" id="dall">Vedi le aste</button></div>
     <div class="strip"><div class="t"><b>${modeName(hot.mode)} \u00b7 ${CALL_LABEL[hot.call]||''}</b><span>${hot.seats} persone. ${hot.seats-hot.filled===1?'Manca 1 giocatore':`Mancano ${hot.seats-hot.filled} giocatori`} per partire</span></div><button class="btn" id="hotjoin">Siediti</button></div>`:'';
+  const openTables=TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats)).slice(0,5);
   let body;
   if(!cur){
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
       <div class="ttl"><b>Home</b><span class="dim">Dashboard</span></div><span style="width:48px"></span></div>
-      <div class="empty-state" style="margin-top:24px">${IC.league}<h2>Nessuna lega</h2><p class="dim">Crea una lega con i tuoi amici e fai l\u2019asta quando volete. Oppure entra con un codice, o siediti a un tavolo.</p>
-        <button class="btn wide" id="newlg" style="margin-top:16px">Crea o unisciti a una lega</button>
-        <button class="btn wide ghost" id="go" style="margin-top:10px">Vai alle aste</button></div>
-      ${resumeHTML()}${hotHTML}`;
+      <div class="empty-state" style="margin-top:18px">${IC.league}<h2>Non hai ancora una lega</h2><p class="dim">Con gli amici: crea una lega privata e fai l\u2019asta quando volete. Con tutti: siediti a un tavolo pubblico, come al poker.</p>
+        <button class="btn wide" id="newlg" style="margin-top:16px">Crea o unisciti a una lega</button></div>
+      ${resumeHTML()}
+      <div class="sec-row"><h2>Tavoli aperti ora</h2><button class="rules-toggle" id="dall">Vedi tutti</button></div>
+      ${openTables.length?openTables.map(t=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${modeName(t.mode)} \u00b7 ${CALL_LABEL[t.call]||''} \u00b7 ${t.roles==='mantra'?'Mantra':'Classic'}</b><span>Tavolo ${t.code} di ${t.host_name||'?'} \u00b7 ${t.filled}/${t.seats} posti \u00b7 ${t.credits} cr</span></div><button class="btn" data-tj="${t.id}">Siediti</button></div>`).join(''):`<p class="dim" style="margin:8px 0">Nessun tavolo aperto adesso. Creane uno dalla sezione Aste e invita gli amici.</p>`}
+      <button class="btn wide ghost" id="go" style="margin-top:12px">Vai alle aste</button>`;
   } else {
     const l=cur.lg, r=cur.room, mine=l.owner===ME, mant=l.roles==='mantra';
     let kp, act;
@@ -663,6 +666,7 @@ async function showHome(){
   if(g('dlu')) g('dlu').onclick=()=>showLineup(cur.room.id,1,'home');
   bindResume();
   if(g('dall')) g('dall').onclick=showAste;
+  $app.querySelectorAll('[data-tj]').forEach(b=>b.onclick=()=>joinTable(TABLES.find(t=>t.id===b.dataset.tj)));
   if(g('hotjoin')) g('hotjoin').onclick=()=>joinTable(hot);
   if(g('lsel')) g('lsel').onclick=()=>{
     openSheet(`<h2>Le mie leghe</h2>${LEAGUES.map(x=>`<button class="lrow ${x.lg.id===cur.lg.id?'on':''}" data-lg="${x.lg.id}"><span style="flex:1"><b>${x.lg.name}</b><small>${x.lg.roles==='mantra'?'Mantra':'Classic'} \u00b7 ${x.members} ${x.members===1?'membro':'membri'} \u00b7 ${!x.room?'asta da fare':x.room.status==='done'?'asta conclusa':'asta in corso'}</small></span></button>`).join('')}
@@ -1423,8 +1427,31 @@ function showNetError(e){
   setNav(false);
   $app.innerHTML=`<div class="empty-state" style="margin-top:20vh"><h2>Non riesco a collegarmi</h2><p class="dim">${errMsg(e)}</p><button class="btn wide" style="margin-top:16px" onclick="location.reload()">Riprova</button></div>`;
 }
+let ALLOW_EXIT=false;
+function initBackGuard(){
+  try{ history.replaceState({fm:0},''); history.pushState({fm:1},''); }catch(e){ return; }
+  window.addEventListener('popstate',()=>{
+    if(ALLOW_EXIT) return;
+    try{ history.pushState({fm:1},''); }catch(e){}
+    const sh=document.getElementById('sheet');
+    if(sh && !sh.hidden){
+      if(sh.querySelector('#exit-ok')) closeSheet(); else closeSheet();
+      return;
+    }
+    const b=document.getElementById('tb-back')||document.getElementById('lu-back');
+    if(b){ b.click(); return; }
+    openSheet(`<h2>Uscire dall\u2019applicazione?</h2><p class="dim" style="margin:6px 0 14px">Le tue leghe e le aste restano salvate: potrai rientrare quando vuoi.</p>
+      <button class="btn wide" id="exit-ok">Esci</button><button class="btn wide ghost" data-close style="margin-top:8px">Resta</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    document.getElementById('exit-ok').onclick=()=>{
+      ALLOW_EXIT=true; closeSheet();
+      try{ history.go(-2); }catch(e){}
+      setTimeout(()=>{ try{ window.close(); }catch(e){} ALLOW_EXIT=false; toast('Puoi chiudere l\u2019app'); },400);
+    };
+  });
+}
 async function boot(){
-  loadStore();
+  loadStore(); initBackGuard();
   if(!window.supabase || SUPABASE_URL.indexOf('__')===0){ return showSetup(); }
   $app.innerHTML='<div class="empty-l" style="padding-top:40vh">Un attimo\u2026</div>';
   try{
