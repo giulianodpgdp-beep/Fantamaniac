@@ -24,8 +24,9 @@
 }
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:inherit}
+html{zoom:.86}
 body{margin:0;background:repeating-linear-gradient(90deg,#082414 0 64px,#0a2b18 64px 128px);color:var(--chalk);font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
-.app{max-width:480px;margin:0 auto;min-height:100vh;padding:0 16px 110px}
+.app{max-width:480px;margin:0 auto;min-height:calc(100vh/.86);padding:0 16px 110px}
 h1,h2,h3,.disp{font-family:'Barlow Condensed','Arial Narrow',Impact,sans-serif;font-weight:700;letter-spacing:.01em;margin:0}
 h1{font-size:40px;line-height:1}
 h2{font-size:26px}
@@ -518,7 +519,7 @@ async function fetchLeagues(){
     const ids=(mm||[]).map(x=>x.league_id);
     if(!ids.length){ LEAGUES=[]; return; }
     const [a,b,c]=await Promise.all([
-      sb.from('leagues').select('*').in('id',ids).order('created_at',{ascending:false}),
+      sb.from('leagues').select('*').in('id',ids).is('deleted_at',null).order('created_at',{ascending:false}),
       sb.from('rooms').select('*').in('league_id',ids),
       sb.from('league_members').select('league_id').in('league_id',ids)]);
     const ll=a.data||[], rr=b.data||[], cm=c.data||[];
@@ -564,6 +565,35 @@ async function joinLeagueCode(code){
   catch(e){ toast(errMsg(e)); }
 }
 let PENDING_LEAGUE=null;
+async function openLeagueManage(cur){
+  const l=cur.lg, mine=l.owner===ME;
+  let mem=[];
+  try{ const {data}=await sb.from('league_members').select('user_id,name').eq('league_id',l.id).order('joined_at'); mem=data||[]; }catch(e){}
+  openSheet(`<h2>${l.name}</h2>
+    <p class="dim" style="margin:4px 0 10px">${l.roles==='mantra'?'Mantra':'Classic'} \u00b7 codice lega <b>${l.code}</b></p>
+    <div class="cf"><span class="lbl">Membri</span>${mem.map(m=>`<div class="rrow"><span class="role ${m.user_id===l.owner?'P':'X'}" style="min-width:auto">${(m.name||'?')[0].toUpperCase()}</span>${m.name||'Senza nome'}${m.user_id===l.owner?' <small class="tm">amministratore</small>':''}${m.user_id===ME?' <small class="tm">tu</small>':''}</div>`).join('')}</div>
+    <button class="btn wide ghost" id="mg-inv" style="margin-top:12px">Invita gli amici</button>
+    ${mine?`<button class="btn wide ghost" id="mg-ren" style="margin-top:8px">Rinomina la lega</button>
+    <button class="btn wide ghost" id="mg-del" style="margin-top:8px;color:#ff8a80">Elimina la lega</button>`
+    :`<p class="note">Solo l\u2019amministratore pu\u00f2 avviare l\u2019asta, rinominare o eliminare la lega.</p>`}
+    <button class="btn wide ghost" id="mg-me" style="margin-top:8px">Cambia il mio nome</button>
+    <button class="btn wide" data-close style="margin-top:8px">Chiudi</button>`);
+  const g=id=>document.getElementById(id);
+  document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+  g('mg-inv').onclick=()=>leagueInvite(l);
+  g('mg-me').onclick=openNameSheet;
+  if(g('mg-ren')) g('mg-ren').onclick=()=>{
+    openSheet(`<h2>Rinomina la lega</h2><input id="rn" class="inp" maxlength="24" value="${l.name.replace(/"/g,'&quot;')}" autocomplete="off"><button class="btn wide" id="rn-ok" style="margin-top:12px">Salva</button>`);
+    g('rn-ok').onclick=async()=>{ const v=g('rn').value.replace(/[<>&"'`]/g,'').trim(); if(v.length<2){ toast('Nome troppo corto'); return; }
+      try{ await rpc('rename_league',{p_league:l.id,p_name:v}); closeSheet(); showHome(); }catch(e){ toast(errMsg(e)); } };
+  };
+  if(g('mg-del')) g('mg-del').onclick=()=>{
+    openSheet(`<h2>Eliminare la lega?</h2><p class="dim" style="margin:6px 0 12px">\u201c${l.name}\u201d sparir\u00e0 per tutti i membri. Questa azione non si pu\u00f2 annullare.</p>
+      <button class="btn wide" id="dl-ok" style="background:#e5534b;color:#fff">S\u00ec, elimina la lega</button><button class="btn wide ghost" data-close style="margin-top:8px">Annulla</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    g('dl-ok').onclick=async()=>{ try{ await rpc('delete_league',{p_league:l.id}); if(STORE.leagueId===l.id){ STORE.leagueId=null; saveStore(); } closeSheet(); toast('Lega eliminata'); showHome(); }catch(e){ toast(errMsg(e)); } };
+  };
+}
 function openStartAuction(lg){
   openSheet(`<h2>Avvia l\u2019asta</h2><p class="dim" style="margin:6px 0 12px">Scegli il tipo di asta per la lega ${lg.name} (${lg.roles==='mantra'?'Mantra':'Classic'}).</p>
     ${MODES.map(m=>`<button class="lrow" data-sm="${m.key}"><span style="flex:1"><b>${m.name}</b><small>${m.desc}</small></span></button>`).join('')}`);
@@ -605,7 +635,7 @@ async function showHome(){
       else act=`<button class="btn wide" id="dlu">Inserisci formazione</button>`;
     }
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
-      <div class="ttl"><b>${l.name}</b><span class="dim">Dashboard</span></div>
+      <div class="ttl"><b>${l.name}</b><span class="dim">${mine?'Amministratore':'Membro'}</span></div>
       <button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button><button class="ibtn" id="dchat" aria-label="Chat">${IC.chat}</button></div>
     <button class="lsel" id="lsel"><span>${l.name}</span>${IC.chev}</button>
     <section class="stage" aria-label="La mia squadra">
@@ -624,7 +654,7 @@ async function showHome(){
   if(g('dbell')) g('dbell').onclick=()=>toast('Nessuna notifica');
   if(g('dchat')) g('dchat').onclick=()=>toast('Chat di lega: in arrivo');
   if(g('dshare')) g('dshare').onclick=()=>leagueInvite(cur.lg);
-  if(g('dset')) g('dset').onclick=openNameSheet;
+  if(g('dset')) g('dset').onclick=()=>openLeagueManage(cur);
   if(g('go')) g('go').onclick=showAste;
   if(g('newlg')) g('newlg').onclick=openLeagueSheet;
   if(g('dstart')) g('dstart').onclick=()=>openStartAuction(cur.lg);
