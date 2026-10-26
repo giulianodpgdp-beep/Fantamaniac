@@ -975,18 +975,29 @@ async function invite(){
   catch(e){ toast('Codice: '+R.code); }
 }
 
+function canClose(){ return R && R.host===ME && R.status!=='done' && SEATS.some(x=>x.is_bot) && !SEATS.some(x=>!x.is_bot && x.user_id && x.user_id!==ME); }
+async function closeTable(){
+  if(!confirm('Chiudere il tavolo? L\u2019asta con i bot verr\u00e0 terminata.')) return;
+  const id=R.id;
+  try{ await rpc('close_table',{p_room:id}); leaveRoomView(); toast('Tavolo chiuso'); showLobby(); }
+  catch(e){ toast(errMsg(e)); }
+}
+function closeBtn(){ return canClose()?'<button class="btn ghost" id="closetbl" style="margin-left:6px">Chiudi tavolo</button>':''; }
+function bindClose(){ const b=document.getElementById('closetbl'); if(b) b.onclick=closeTable; }
+
 function renderWaiting(){
   const slots=Array.from({length:R.max_seats},(_,i)=>SEATS.find(s=>s.seat===i)||null);
   const meIdx=Math.max(0,slots.findIndex(s=>s&&s.user_id===ME));
   const isHost=R.host===ME;
   $app.innerHTML = `
-    <div class="topbar"><h2>Tavolo ${R.code}</h2><button class="btn ghost" id="leave">Esci</button></div>
+    <div class="topbar"><h2>Tavolo ${R.code}</h2><span>${closeBtn()}<button class="btn ghost" id="leave">Esci</button></span></div>
     <p class="dim">${modeName(R.mode)} · ${R.roles==='mantra'?'Mantra':'Classic'} · ${R.is_private?'Privato':'Pubblico'} \u00b7 ${CALL_LABEL[R.call]} \u00b7 ${R.credits} crediti \u00b7 timer ${R.bid_time}s${R.mode!=='classic'?` \u00b7 ${R.days} ${R.days===1?'giornata':'giornate'}`:''}</p>
     ${ovalHTML(`<div class="dim" style="font-size:13px">Posti occupati</div><div class="big-count" style="font-size:56px">${SEATS.length}/${R.max_seats}</div>`, slots, meIdx,
       (s,i)=> s ? {cls:s.user_id===ME?'me':'', av:s.is_bot?'\u2699':s.name[0], name:s.name, sub:s.credits+' cr'} : {cls:'empty', av:'?', name:'Libero', sub:'\u00a0'})}
     <div class="codebox"><span class="dim">Codice tavolo</span><b class="code">${R.code}</b><button class="btn" id="invite">Invita gli amici</button></div>
     ${isHost?`<button class="btn wide ghost" id="fillbots" style="margin-top:12px">Riempi i posti liberi con i bot e avvia</button>`:`<p class="note">L\u2019asta parte da sola quando tutti i posti sono occupati.</p>`}`;
   document.getElementById('invite').onclick=invite;
+  bindClose();
   const fb=document.getElementById('fillbots');
   if(fb) fb.onclick=async()=>{ fb.disabled=true; try{ await rpc('fill_bots',{p_room:R.id}); await pollState(); }catch(e){ toast(errMsg(e)); fb.disabled=false; } };
   document.getElementById('leave').onclick=async()=>{
@@ -1090,7 +1101,7 @@ function renderAuction(){
   const hadSearch = document.activeElement && document.activeElement.id==='psearch', selS = hadSearch?document.activeElement.selectionStart:0;
   const sc = document.querySelector('.plist')?.scrollTop||0;
   $app.innerHTML = `
-    <div class="topbar"><h2>Tavolo ${R.code}</h2><button class="btn ghost" id="leave">Esci</button></div>
+    <div class="topbar"><h2>Tavolo ${R.code}</h2><span>${closeBtn()}<button class="btn ghost" id="leave">Esci</button></span></div>
     ${oval}
     ${below}
     <div class="log">${LOG.slice(0,4).map(l=>`<div>${l}</div>`).join('')}</div>
@@ -1098,6 +1109,7 @@ function renderAuction(){
   if(keepOpen) document.querySelector('details.roster').open=true;
   const pl=document.querySelector('.plist'); if(pl) pl.scrollTop=sc;
   document.getElementById('leave').onclick=()=>{ leaveRoomView(); toast('Puoi rientrare dalla Home'); showHome(); };
+  bindClose();
   $app.querySelectorAll('[data-role]').forEach(b=>b.onclick=()=>{PICK_ROLE=b.dataset.role;RV.sig='';renderRoom()});
   bindPick();
   const ps_=document.getElementById('psearch');
