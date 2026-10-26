@@ -365,6 +365,7 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .pslot.empty .pn{background:rgba(0,0,0,.35);color:#fff}
 .pslot .pl{font-size:10px;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.6);line-height:1}
 
+.tabs{flex-wrap:wrap}.tabs .tab{flex:1 0 52px;min-height:40px}
 </style>
 </head>
 <body>
@@ -1114,9 +1115,17 @@ function rosterHTML(){
 }
 let PICK_ROLE=null, PICK_Q='';
 const norm = t=>(t||'').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+const MR=['Por','Dd','Dc','Ds','B','E','M','C','W','T','A','Pc'];
+const MR_NAME={Por:'Por',Dd:'Dd',Dc:'Dc',Ds:'Ds',B:'B',E:'E',M:'M',C:'C',W:'W',T:'T',A:'A',Pc:'Pc'};
+const isM = me=>('F' in me.need);
+function pickTabs(me){
+  const roles=['P','D','C','A'].filter(r=>slotOf(me.need,r)!==null);
+  if(!isM(me)) return roles.map(r=>[r,ROLE_NAME[r]]);
+  return MR.filter(t=>t==='Por'?roles.includes('P'):roles.some(r=>r!=='P')).map(t=>[t,t]);
+}
 function pickList(me){
-  const roles=['P','D','C','A'].filter(r=>slotOf(me.need,r)!==null), q=norm(PICK_Q.trim());
-  const base=POOL.filter(p=>p.owner_seat==null&&(q?roles.includes(p.role):p.role===PICK_ROLE));
+  const roles=['P','D','C','A'].filter(r=>slotOf(me.need,r)!==null), q=norm(PICK_Q.trim()), mt=isM(me);
+  const base=POOL.filter(p=>p.owner_seat==null&&(q?roles.includes(p.role):(mt?roles.includes(p.role)&&(p.rm||'').split(';').includes(PICK_ROLE):p.role===PICK_ROLE)));
   const list=q?base.filter(p=>norm(p.name).includes(q)||norm(p.team).includes(q)):base;
   return list.sort((a,b)=>b.q-a.q);
 }
@@ -1143,13 +1152,13 @@ function renderAuction(){
     const myTurn = me && R.caller_seat===me.seat;
     center=`<div class="dim" style="font-size:13px">${draft?'Draft':manual?'Chiamata':'Estrazione'}</div><div class="pname">${!manual?'a sorte':myTurn?'Tocca a te':sName(R.caller_seat)}</div>`;
     if(myTurn && manual){
-      const roles=['P','D','C','A'].filter(r=>slotOf(me.need,r)!==null);
-      if(!PICK_ROLE || !roles.includes(PICK_ROLE)) PICK_ROLE=roles[0];
+      const tabs=pickTabs(me);
+      if(!PICK_ROLE || !tabs.some(t=>t[0]===PICK_ROLE)) PICK_ROLE=tabs[0][0];
       const list=pickList(me);
       below=`<div class="panel">
         <p class="dim">${draft?'Scegli un giocatore: è subito tuo, senza rilanci. Hai pochi secondi, poi scelgo io.':'Scegli un giocatore: l’offerta parte da 1 credito a tuo nome. Hai pochi secondi, poi scelgo io.'}</p>
         <input id="psearch" class="inp" type="search" placeholder="Cerca un calciatore o una squadra\u2026" value="${PICK_Q.replace(/"/g,'&quot;')}" autocomplete="off" autocapitalize="off" style="margin-bottom:8px;min-height:46px">
-        <div class="tabs" id="ptabs" ${PICK_Q.trim()?'hidden':''}>${roles.map(r=>`<button class="tab ${r===PICK_ROLE?'on':''}" data-role="${r}">${ROLE_NAME[r]}</button>`).join('')}</div>
+        <div class="tabs" id="ptabs" ${PICK_Q.trim()?'hidden':''}>${tabs.map(t=>`<button class="tab ${t[0]===PICK_ROLE?'on':''}" data-role="${t[0]}">${t[1]}</button>`).join('')}</div>
         <div class="plist">${pickRowsHTML(me,list)}</div>
         <p class="msg">Il numero a destra \u00e8 la quotazione di riferimento.</p>
       </div>`;
