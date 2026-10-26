@@ -347,6 +347,9 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .mv{margin-left:auto;display:flex;gap:4px}
 .mv button{width:36px;height:34px;border-radius:8px;border:1.5px solid var(--line);font-size:12px}
 .mv button:disabled{opacity:.3}
+.pslot .pl{font-size:10px;color:#d6f5de;line-height:1}
+.pslot .role.X{background:transparent;border:1.5px dashed #9fd4ad;color:#d6f5de}
+.rrow.bn.out{opacity:.45}
 </style>
 </head>
 <body>
@@ -1097,7 +1100,7 @@ function renderFinished(){
     RV.saved=true;
     const me=meSeat();
     if(me){
-      STORE.history.unshift({ts:Date.now(), table:'Tavolo '+cfg.code, mode:cfg.mode, scope:'', room:cfg.id, lineup:(cfg.roles==='classic'&&cfg.mode!=='super'), credits:cfg.credits, spent:cfg.credits-me.credits,
+      STORE.history.unshift({ts:Date.now(), table:'Tavolo '+cfg.code, mode:cfg.mode, scope:'', room:cfg.id, lineup:(cfg.mode!=='super'), credits:cfg.credits, spent:cfg.credits-me.credits,
         roster:POOL.filter(p=>p.owner_seat===me.seat).map(p=>({name:p.name,role:p.role,price:p.price}))});
       STORE.history=STORE.history.slice(0,30); saveStore();
     }
@@ -1114,19 +1117,54 @@ function renderFinished(){
         ${['P','D','C','A'].flatMap(r=>POOL.filter(p=>p.owner_seat===s.seat&&p.role===r)).map(p=>`<div class="rrow"><span class="role ${p.role}">${p.role}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
       </div>`;
     }).join('')}
-    <div style="display:grid;gap:8px;margin-top:18px">${(cfg.roles==='classic'&&cfg.mode!=='super'&&meSeat())?'<button class="btn wide" id="lineup">Schiera la formazione</button>':''}<button class="btn wide ${(cfg.roles==='classic'&&cfg.mode!=='super')?'ghost':''}" id="again">Torna alla Home</button></div>
+    <div style="display:grid;gap:8px;margin-top:18px">${(cfg.mode!=='super'&&meSeat())?'<button class="btn wide" id="lineup">Schiera la formazione</button>':''}<button class="btn wide ${(cfg.mode!=='super')?'ghost':''}" id="again">Torna alla Home</button></div>
     <p class="note">${cfg.mode==='classic'?'Prossimo passo: dare un punteggio alle rose con i voti della giornata e fare una classifica.':'Questa rosa vale solo per la giornata o la partita del tavolo. Poi si azzera e puoi rifare un\u2019asta.'}</p>`;
   document.getElementById('again').onclick=()=>{ leaveRoomView(); showHome(); };
   const lb=document.getElementById('lineup'); if(lb) lb.onclick=()=>{ const id=cfg.id; leaveRoomView(); showLineup(id); };
 }
 
-/* ---------- FORMAZIONE (Classic) ---------- */
-const MODULES = ['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'];
-const modNeed = m=>{ const [d,c,a]=m.split('-').map(Number); return {P:1,D:d,C:c,A:a}; };
+/* ---------- FORMAZIONE (Classic e Mantra) ---------- */
+const CLASSIC_MODS = ['3-4-3','3-5-2','4-3-3','4-4-2','4-5-1','5-3-2','5-4-1'];
+// Griglia Mantra: per ogni posto i ruoli ammessi (alternativi, separati da |). Ricostruita dalle regole di fantacalcio.it
+const MANTRA_GRID = {
+  '3-4-3':  ['Por','Dc|B','Dc|B','Dc|B','E','M|C','M|C','E','W|A','A|Pc','W|A'],
+  '3-4-1-2':['Por','Dc|B','Dc|B','Dc|B','E','M|C','M|C','E','T','A|Pc','A|Pc'],
+  '3-4-2-1':['Por','Dc|B','Dc|B','Dc|B','E','M|C','M|C','E','W|T','W|T','A|Pc'],
+  '3-5-2':  ['Por','Dc|B','Dc|B','Dc|B','E','M|C','C','M|C','E','A|Pc','A|Pc'],
+  '3-5-1-1':['Por','Dc|B','Dc|B','Dc|B','E','M|C','C','M|C','E','T|A','A|Pc'],
+  '4-3-3':  ['Por','Dd','Dc','Dc','Ds','M|C','C','M|C','W|A','A|Pc','W|A'],
+  '4-3-1-2':['Por','Dd','Dc','Dc','Ds','M|C','C','M|C','T','A|Pc','A|Pc'],
+  '4-4-2':  ['Por','Dd','Dc','Dc','Ds','E|W','M|C','M|C','E|W','A|Pc','A|Pc'],
+  '4-1-4-1':['Por','Dd','Dc','Dc','Ds','M','E|W','C','C','E|W','A|Pc'],
+  '4-4-1-1':['Por','Dd','Dc','Dc','Ds','E|W','M|C','M|C','E|W','T|A','A|Pc'],
+  '4-2-3-1':['Por','Dd','Dc','Dc','Ds','M','M|C','W|T','T','W|T','A|Pc']
+};
 let LU = null;
+const luMant = ()=>LU.room.roles==='mantra';
+const luMods = ()=>luMant()?Object.keys(MANTRA_GRID):CLASSIC_MODS;
 const luBy = pid=>LU.mine.find(p=>p.pid===pid);
-const luStarters = ()=>['P','D','C','A'].flatMap(r=>LU.slots[r]).filter(x=>x!=null);
-function luFeasible(m){ const n=modNeed(m); return ['P','D','C','A'].every(r=>LU.mine.filter(p=>p.role===r).length>=n[r]); }
+const rmOf = p=>(p.rm||'').split(';').filter(Boolean);
+function luSpec(m){
+  if(luMant()) return MANTRA_GRID[m].map(g=>({label:g.replace(/\|/g,'/'), test:p=>rmOf(p).some(r=>g.split('|').includes(r))}));
+  const [d,c,a]=m.split('-').map(Number), out=[{label:'P',test:p=>p.role==='P'}];
+  [['D',d],['C',c],['A',a]].forEach(([r,n])=>{ for(let i=0;i<n;i++) out.push({label:r,test:p=>p.role===r}); });
+  return out;
+}
+const luLines = m=>luMant()?[1,...m.split('-').map(Number)]:[1,...m.split('-').map(Number)];
+// abbina il piu' alto numero di calciatori ai posti (Kuhn); "keep" = assegnazioni da mantenere se valide
+function luMatch(spec, players, keep){
+  const at=Array(spec.length).fill(null), used=new Set();
+  if(keep) keep.forEach((pid,i)=>{ const p=pid!=null&&players.find(x=>x.pid===pid); if(p&&spec[i]&&spec[i].test(p)&&!used.has(pid)){ at[i]=pid; used.add(pid); } });
+  const matchP={}; at.forEach((pid,i)=>{ if(pid!=null) matchP[pid]=i; });
+  const free=players.filter(p=>!used.has(p.pid));
+  const tryS=(i,seen)=>{ for(const p of free){ if(spec[i].test(p)&&!seen.has(p.pid)){ seen.add(p.pid); if(matchP[p.pid]==null||tryS(matchP[p.pid],seen)){ matchP[p.pid]=i; return true; } } } return false; };
+  for(let i=0;i<spec.length;i++) if(at[i]==null) tryS(i,new Set());
+  const res=Array(spec.length).fill(null);
+  Object.entries(matchP).forEach(([pid,i])=>{ res[i]=+pid; });
+  return res;
+}
+function luFeasible(m){ return luMatch(luSpec(m),LU.mine).every(x=>x!=null); }
+const luStarters = ()=>LU.slots.filter(x=>x!=null);
 function luRebench(){
   const st=new Set(luStarters()), have=new Set(LU.mine.map(p=>p.pid));
   const keep=LU.bench.filter(x=>have.has(x)&&!st.has(x));
@@ -1135,11 +1173,8 @@ function luRebench(){
   LU.bench=[...keep,...rest];
 }
 function luSetModule(m){
-  LU.module=m; const n=modNeed(m);
-  for(const r of ['P','D','C','A']){
-    const cur=LU.slots[r].filter(x=>x!=null).slice(0,n[r]);
-    LU.slots[r]=Array.from({length:n[r]},(_,i)=>i<cur.length?cur[i]:null);
-  }
+  const spec=luSpec(m), cur=LU.slots.map(x=>x), players=LU.mine.filter(p=>cur.includes(p.pid));
+  LU.module=m; LU.slots=luMatch(spec,players,LU.slots.length===spec.length?cur:null);
   luRebench();
 }
 async function showLineup(roomId, md){
@@ -1152,64 +1187,64 @@ async function showLineup(roomId, md){
     const {data:mine}=await sb.from('pool').select('*').eq('room_id',roomId).eq('owner_seat',seat.seat);
     md=md||1;
     const {data:ex}=await sb.from('lineups').select('*').eq('room_id',roomId).eq('seat',seat.seat).eq('md',md).maybeSingle();
-    LU={room,seat:seat.seat,mine:mine||[],md,module:'4-4-2',slots:{P:[null],D:[],C:[],A:[]},bench:[],saved:!!ex};
-    const first=MODULES.find(luFeasible)||'4-4-2';
-    luSetModule(ex&&MODULES.includes(ex.module)?ex.module:(luFeasible('4-4-2')?'4-4-2':first));
-    if(ex){
-      const n=modNeed(LU.module), by={};
-      ex.starters.forEach(pid=>{ const pl=luBy(pid); if(pl) (by[pl.role]=by[pl.role]||[]).push(pid); });
-      for(const r of ['P','D','C','A']) LU.slots[r]=Array.from({length:n[r]},(_,i)=>(by[r]||[])[i]??null);
-      LU.bench=ex.bench||[]; luRebench();
-    }
+    LU={room,seat:seat.seat,mine:mine||[],md,module:'4-4-2',slots:Array(11).fill(null),bench:[],saved:!!ex};
+    const mods=luMods(), first=(luFeasible('4-4-2')?'4-4-2':mods.find(luFeasible))||'4-4-2';
+    if(ex && mods.includes(ex.module) && ex.starters.length===11){
+      LU.module=ex.module; LU.slots=ex.starters.map(x=>luBy(x)?x:null); LU.bench=ex.bench||[]; luRebench();
+    } else { LU.module=first; LU.slots=Array(11).fill(null); luRebench(); }
     renderLineup();
   }catch(e){ toast(errMsg(e)); showHome(); }
 }
 function renderLineup(){
-  const L_=LU, r_=L_.room, n=luStarters().length;
-  const slot=(r,i)=>{ const pid=L_.slots[r][i], p=pid!=null?luBy(pid):null;
-    return `<button class="pslot ${p?'':'empty'}" data-sr="${r}" data-si="${i}"><i class="role ${r}">${r}</i><span class="pn">${p?p.name:'+'}</span></button>`; };
-  const line=r=>`<div class="pline">${L_.slots[r].map((_,i)=>slot(r,i)).join('')}</div>`;
+  const L_=LU, r_=L_.room, n=luStarters().length, spec=luSpec(L_.module), lines=luLines(L_.module), mant=luMant();
+  const slot=(i)=>{ const pid=L_.slots[i], p=pid!=null?luBy(pid):null, rl=p?(p.role):spec[i].label[0];
+    return `<button class="pslot ${p?'':'empty'}" data-si="${i}"><i class="role ${p?p.role:'X'}">${spec[i].label.length>3?spec[i].label.split('/')[0]:spec[i].label}</i><span class="pn">${p?p.name:'+'}</span>${spec[i].label.length>1&&mant?`<small class="pl">${spec[i].label}</small>`:''}</button>`; };
+  let idx=0; const rows=lines.map(sz=>{ const items=[]; for(let k=0;k<sz;k++) items.push(slot(idx++)); return `<div class="pline">${items.join('')}</div>`; });
+  const pitch=rows.reverse().join('');
+  const bn=L_.bench, cut=mant?12:bn.length;
+  const benchRow=(pid,i)=>{ const p=luBy(pid); return `<div class="rrow bn ${i>=cut?'out':''}"><span class="bnn">${i+1}</span><span class="role ${p.role}">${p.role}</span>${p.name}${mant&&p.rm?` <small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="mv"><button data-up="${i}" ${i?'':'disabled'} aria-label="Su">▲</button><button data-dn="${i}" ${i<bn.length-1?'':'disabled'} aria-label="Giù">▼</button></span></div>`; };
   $app.innerHTML = `
     <div class="tb"><button class="back" id="lu-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t">Formazione</h1><span style="width:48px"></span></div>
-    <p class="tag" style="margin-bottom:10px">${modeName(r_.mode)} · Tavolo ${r_.code}</p>
+    <p class="tag" style="margin-bottom:10px">${modeName(r_.mode)} · ${mant?'Mantra':'Classic'} · Tavolo ${r_.code}</p>
     ${r_.days>1?`<div class="frow" style="margin-bottom:10px"><span class="lbl">Giornata</span>${Array.from({length:r_.days},(_,i)=>`<button class="chip ${L_.md===i+1?'on':''}" data-md="${i+1}">${i+1}</button>`).join('')}</div>`:''}
-    <div class="frow" style="margin-bottom:12px"><span class="lbl">Modulo</span>${MODULES.map(m=>`<button class="chip ${m===L_.module?'on':''} ${luFeasible(m)?'':'off'}" data-mod="${m}">${m}</button>`).join('')}</div>
-    <div class="pitch">${line('A')}${line('C')}${line('D')}${line('P')}</div>
-    <p class="dim" style="margin:8px 0 12px">${n}/11 titolari. Tocca un posto per scegliere il calciatore.</p>
+    <div class="frow" style="margin-bottom:12px"><span class="lbl">Modulo</span>${luMods().map(m=>`<button class="chip ${m===L_.module?'on':''} ${luFeasible(m)?'':'off'}" data-mod="${m}">${m}</button>`).join('')}</div>
+    <div class="pitch">${pitch}</div>
+    <p class="dim" style="margin:8px 0 12px">${n}/11 titolari. Tocca un posto per scegliere il calciatore.${mant?' Le sigle sotto ai posti sono i ruoli ammessi.':''}</p>
     <h2 class="sec" style="font-size:22px">Panchina</h2>
-    <p class="dim" style="margin:0 0 6px;font-size:13px">Entrano nell’ordine in cui li metti. Usa le frecce per cambiare l’ordine.</p>
-    ${L_.bench.map((pid,i)=>{ const p=luBy(pid); return `<div class="rrow bn"><span class="bnn">${i+1}</span><span class="role ${p.role}">${p.role}</span>${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="mv"><button data-up="${i}" ${i?'':'disabled'} aria-label="Su">▲</button><button data-dn="${i}" ${i<L_.bench.length-1?'':'disabled'} aria-label="Giù">▼</button></span></div>`; }).join('')||'<p class="dim">Nessun calciatore in panchina.</p>'}
+    <p class="dim" style="margin:0 0 6px;font-size:13px">${mant?'Entrano nell’ordine in cui li metti. Valgono i primi 12, con almeno un portiere; gli altri restano fuori distinta.':'Entrano nell’ordine in cui li metti. Usa le frecce per cambiare l’ordine.'}</p>
+    ${bn.map(benchRow).join('')||'<p class="dim">Nessun calciatore in panchina.</p>'}
     <button class="btn wide" id="lu-save" style="margin-top:16px">${L_.saved?'Aggiorna la formazione':'Salva la formazione'}</button>
-    <p class="note">I punteggi arrivano quando colleghiamo i voti della Serie A. Intanto la formazione resta salvata.</p>`;
+    <p class="note">I punteggi arrivano quando colleghiamo i voti della Serie A. Intanto la formazione resta salvata.${mant?' La griglia dei ruoli per ogni modulo è ricostruita dalle regole di fantacalcio.it: se un posto ti sembra sbagliato, dimmelo.':''}</p>`;
   document.getElementById('lu-back').onclick=()=>{ LU=null; showHistory(); };
   $app.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>showLineup(r_.id,+b.dataset.md));
   $app.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{
     if(!luFeasible(b.dataset.mod)){ toast('Con questa rosa non puoi usare questo modulo'); return; }
     luSetModule(b.dataset.mod); L_.saved=false; renderLineup(); });
-  $app.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.up; [L_.bench[i-1],L_.bench[i]]=[L_.bench[i],L_.bench[i-1]]; renderLineup(); });
-  $app.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.dn; [L_.bench[i+1],L_.bench[i]]=[L_.bench[i],L_.bench[i+1]]; renderLineup(); });
-  $app.querySelectorAll('[data-sr]').forEach(b=>b.onclick=()=>luPick(b.dataset.sr,+b.dataset.si));
+  $app.querySelectorAll('[data-up]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.up; [L_.bench[i-1],L_.bench[i]]=[L_.bench[i],L_.bench[i-1]]; L_.saved=false; renderLineup(); });
+  $app.querySelectorAll('[data-dn]').forEach(b=>b.onclick=()=>{ const i=+b.dataset.dn; [L_.bench[i+1],L_.bench[i]]=[L_.bench[i],L_.bench[i+1]]; L_.saved=false; renderLineup(); });
+  $app.querySelectorAll('[data-si]').forEach(b=>b.onclick=()=>luPick(+b.dataset.si));
   document.getElementById('lu-save').onclick=async()=>{
     const miss=11-luStarters().length;
     if(miss>0){ toast(`Mancano ${miss} titolari`); return; }
+    if(mant && !L_.bench.slice(0,12).some(pid=>luBy(pid).role==='P')){ toast('In panchina serve almeno un portiere tra i primi 12'); return; }
     const bt=document.getElementById('lu-save'); bt.disabled=true;
     try{
-      await rpc('save_lineup',{p_room:r_.id,p_md:L_.md,p_module:L_.module,p_starters:['P','D','C','A'].flatMap(r=>L_.slots[r]),p_bench:L_.bench});
+      await rpc('save_lineup',{p_room:r_.id,p_md:L_.md,p_module:L_.module,p_starters:L_.slots,p_bench:L_.bench});
       L_.saved=true; toast('Formazione salvata'); renderLineup();
     }catch(e){ toast(errMsg(e)); bt.disabled=false; }
   };
 }
-function luPick(role,idx){
-  const st=new Set(luStarters()), cur=LU.slots[role][idx];
-  const list=LU.mine.filter(p=>p.role===role&&!st.has(p.pid)).sort((a,b)=>(b.price||0)-(a.price||0));
-  openSheet(`<h2>${ROLE_NAME[role]}</h2>
-    <div class="plist" style="max-height:52vh">${list.map(p=>`<button class="prow" data-take="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.price}</span></button>`).join('')||'<p class="dim" style="padding:10px">Nessun altro calciatore in questo ruolo.</p>'}</div>
+function luPick(i){
+  const spec=luSpec(LU.module)[i], st=new Set(luStarters()), cur=LU.slots[i], mant=luMant();
+  const list=LU.mine.filter(p=>spec.test(p)&&!st.has(p.pid)).sort((a,b)=>(b.price||0)-(a.price||0));
+  openSheet(`<h2>${spec.label}</h2>
+    <div class="plist" style="max-height:52vh">${list.map(p=>`<button class="prow" data-take="${p.pid}"><span class="role ${p.role}">${p.role}</span><span class="nm">${p.name}${mant&&p.rm?`<small class="tm">${p.rm.replace(/;/g,' ')}</small>`:''}${p.team?`<small class="tm">${p.team}</small>`:''}</span><span class="q">${p.price}</span></button>`).join('')||'<p class="dim" style="padding:10px">Nessun altro calciatore adatto a questo posto.</p>'}</div>
     ${cur!=null?'<button class="btn wide ghost" id="lu-free" style="margin-top:10px">Libera il posto</button>':''}
     <button class="btn wide" data-close style="margin-top:10px">Chiudi</button>`);
   document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
   document.querySelectorAll('#sheet [data-take]').forEach(b=>b.onclick=()=>{
-    LU.slots[role][idx]=+b.dataset.take; luRebench(); LU.saved=false; closeSheet(); renderLineup(); });
-  const fr=document.getElementById('lu-free'); if(fr) fr.onclick=()=>{ LU.slots[role][idx]=null; luRebench(); LU.saved=false; closeSheet(); renderLineup(); };
+    LU.slots[i]=+b.dataset.take; luRebench(); LU.saved=false; closeSheet(); renderLineup(); });
+  const fr=document.getElementById('lu-free'); if(fr) fr.onclick=()=>{ LU.slots[i]=null; luRebench(); LU.saved=false; closeSheet(); renderLineup(); };
 }
 
 /* ---------- AVVIO ---------- */
