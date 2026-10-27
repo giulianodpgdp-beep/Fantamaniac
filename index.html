@@ -411,7 +411,7 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 const ROLE_NAME = {P:'Portieri',D:'Difensori',C:'Centrocampisti',A:'Attaccanti'};
-const slotOf = (n,role)=>!n?null:('F' in n)?((role==='P'&&n.P>0)?'P':(n.F>0?'F':null)):(n[role]>0?role:null);
+const slotOf = (n,role)=>!n?null:('X' in n)?(n.X>0?'X':null):('F' in n)?((role==='P'&&n.P>0)?'P':(n.F>0?'F':null)):(n[role]>0?role:null);
 const ROLE_ONE = {P:'portiere',D:'difensore',C:'centrocampista',A:'attaccante'};
 
 const $app = document.getElementById('app');
@@ -482,7 +482,8 @@ const logoSVG=(sz)=>MARK_SVG.replace(/SZ/g,sz).replace(/bc-ID/g,'bc'+(++_lid));
 const LOGO = logoSVG(44);
 const MODES = [
   {id:'asta-turbo',      name:'Asta Turbo',      ic:'bolt',   g:'g5', desc:'18 calciatori a squadra, valida per 1-3 giornate.', ready:true, novita:true, key:'turbo'},
-  {id:'asta-superturbo', name:'Asta Superturbo', ic:'target', g:'g6', desc:'4 calciatori, uno per ruolo, valida per 1-3 giornate.', ready:true, novita:true, key:'super'},
+  {id:'asta-minifoot', name:'Asta Minifoot', ic:'target', g:'g6', desc:'6 calciatori: 1 portiere, 2 difensori, 2 centrocampisti, 1 attaccante. Valida per 1-3 giornate.', ready:true, novita:true, key:'super'},
+  {id:'asta-scorpione', name:'Asta Scorpione', ic:'pitch', g:'g2', desc:'3 contro 3: scegli 3 calciatori con i ruoli che vuoi, anche senza portiere. Valida per 1-3 giornate.', ready:true, novita:true, key:'scorpione'},
   {id:'asta-classic',    name:'Asta Classica',   ic:'gavel',  g:'g1', desc:'L\u2019asta di stagione: scegli tu la rosa.', ready:true, key:'classic'}
 ];
 const modeName = k=>(MODES.find(m=>m.key===k)||{}).name||'Asta';
@@ -859,7 +860,7 @@ function openStartAuction(lg){
     ${MODES.map(m=>`<button class="lrow" data-sm="${m.key}"><span style="flex:1"><b>${m.name}</b><small>${m.desc}</small></span></button>`).join('')}`);
   document.querySelectorAll('#sheet [data-sm]').forEach(b=>b.onclick=async()=>{
     const k=b.dataset.sm;
-    if(k==='super' && lg.roles==='mantra'){ toast('Il Superturbo si gioca con i ruoli Classic'); return; }
+    if(NOLU(k) && lg.roles==='mantra'){ toast('Questa asta si gioca con i ruoli Classic'); return; }
     NEWLG=lg; closeSheet(); curMode=k; await showLobby(k); openCreate(k);
   });
 }
@@ -893,7 +894,7 @@ async function showHome(){
       const done=r.status==='done', left=cur.seat?cur.seat.credits:null;
       kp=[[cur.members,'Membri'],[left!=null?left:'\u2014','Crediti'],[left!=null?r.credits-left:'\u2014','Spesi'],[r.days||'\u2014','Giornate']];
       if(!done) act = cur.seat ? `<button class="btn wide" id="dgo">Torna all\u2019asta</button>` : (r.status==='open'?`<button class="btn wide" id="djoin">Siediti all\u2019asta</button>`:`<p class="note" style="margin:0">L\u2019asta \u00e8 gi\u00e0 iniziata.</p>`);
-      else if(r.mode==='super') act=`<p class="note" style="margin:0">Nel Superturbo giocano tutti e 4 i calciatori: non serve la formazione.</p>`;
+      else if(NOLU(r.mode)) act=`<p class="note" style="margin:0">In questa asta giocano tutti i calciatori della rosa: non serve la formazione.</p>`;
       else if(!cur.seat) act=`<p class="note" style="margin:0">Non hai partecipato all\u2019asta di questa lega.</p>`;
       else act=`<button class="btn wide" id="dlu">Inserisci formazione</button>`;
     }
@@ -958,10 +959,12 @@ const ROLE_NAME_LONG = {P:'portieri',D:'difensori',C:'centrocampisti',A:'attacca
 // per ogni tipo di asta: limiti scelti insieme
 const RULES = {
   turbo:  {seats:[2,20], credits:[100,5000], need:{P:2,D:6,C:6,A:4}, days:true},
-  super:  {seats:[2,50], credits:[100,500],  need:{P:1,D:1,C:1,A:1}, days:true},
+  super:  {seats:[2,50], credits:[100,500],  need:{P:1,D:2,C:2,A:1}, days:true},
+  scorpione:{seats:[2,50], credits:[100,500],  need:{X:3}, days:true},
   classic:{seats:[2,20], credits:[100,5000], need:null, days:false}
 };
 // quanti calciatori ci sono per ruolo nel database (limita rosa x persone)
+const NOLU = m=>m==='super'||m==='scorpione';
 const CAP = {P:65,D:192,C:195,A:87};
 const idOfKey = k=>MODES.find(m=>m.key===k).id;
 /* ---------- RETE (Supabase) ---------- */
@@ -1034,19 +1037,19 @@ function stopLobby(){
   if(lobbyChan && sb){ sb.removeChannel(lobbyChan); } lobbyChan=null;
 }
 function stopTick(){ leaveRoomView(); }
-const needTotal = n=>['P','D','C','A','F'].reduce((a,r)=>a+((n&&n[r])||0),0);
+const needTotal = n=>['P','D','C','A','F','X'].reduce((a,r)=>a+((n&&n[r])||0),0);
 function tableRules(t){
   const total=needTotal(t.need);
   const r=[
     `${t.max_seats} giocatori, ${t.credits} crediti a testa`,
-    ('F' in t.need)?`Ruoli Mantra: rosa da ${total} calciatori, almeno ${t.need.P} portieri e gli altri senza vincoli di ruolo`:`Rosa da ${total} calciatori: ${t.need.P} portieri, ${t.need.D} difensori, ${t.need.C} centrocampisti, ${t.need.A} attaccanti`,
+    ('X' in t.need)?`Rosa da ${total} calciatori, tutti con ruolo libero: anche senza portiere`:('F' in t.need)?`Ruoli Mantra: rosa da ${total} calciatori, almeno ${t.need.P} portieri e gli altri senza vincoli di ruolo`:`Rosa da ${total} calciatori: ${t.need.P} portieri, ${t.need.D} difensori, ${t.need.C} centrocampisti, ${t.need.A} attaccanti`,
     CALL_INFO[t.call],
     t.call==='draft'?'Hai 40 secondi per scegliere, poi scelgo io. I crediti non si spendono':`Timer ${t.bid_time} secondi, ogni rilancio lo porta ad almeno 4`,
     t.call==='draft'?'Il valore di ogni calciatore è quello di listino, riproporzionato ai crediti del tavolo':'Devi sempre tenere 1 credito per ogni posto ancora vuoto',
     'L’asta parte da sola quando tutti i posti sono occupati'
   ];
   if(t.mode==='turbo') r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato: poi la rosa si azzera`);
-  if(t.mode==='super') r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato, 4 calciatori: poi la rosa si azzera`);
+  if(NOLU(t.mode)) r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato, ${total} calciatori: poi la rosa si azzera`);
   return r;
 }
 function topBarHTML(title){
@@ -1103,7 +1106,7 @@ async function showLobby(mode){
 /* ---------- CREA TAVOLO ---------- */
 function openCreate(mode){
   const R_=RULES[mode], m=MODES.find(x=>x.key===mode);
-  const f={mode, priv:false, roles:(NEWLG?NEWLG.roles:'classic'), call:'random', seats:Math.min(8,R_.seats[1]), credits:mode==='super'?300:500, timer:10, days:1,
+  const f={mode, priv:false, roles:(NEWLG?NEWLG.roles:'classic'), call:'random', seats:Math.min(8,R_.seats[1]), credits:NOLU(mode)?300:500, timer:10, days:1,
            need:R_.need?{...R_.need}:{P:3,D:8,C:8,A:6}};
   const clamp=(v,lo,hi)=>Math.max(lo,Math.min(hi,Math.round(+v)||lo));
   const maxRole = r=>Math.max(0,Math.min(12,Math.floor(CAP[r]/f.seats)));
@@ -1125,7 +1128,8 @@ function openCreate(mode){
     } else if(!mant && !R_.need) ['P','D','C','A'].forEach(r=>{ f.need[r]=Math.min(f.need[r],maxRole(r)); });
     const tot=needTotal(f.need);
     let rosterHTML;
-    if(R_.need && !mant) rosterHTML=`<p class="dim" style="margin:0">${tot} calciatori: ${f.need.P} portieri, ${f.need.D} difensori, ${f.need.C} centrocampisti, ${f.need.A} attaccanti. Non si cambia.</p>`;
+    if(R_.need && f.need.X) rosterHTML=`<p class="dim" style="margin:0">${tot} calciatori a scelta: qualsiasi ruolo, anche senza portiere. Non si cambia.</p>`;
+    else if(R_.need && !mant) rosterHTML=`<p class="dim" style="margin:0">${tot} calciatori: ${f.need.P} portieri, ${f.need.D} difensori, ${f.need.C} centrocampisti, ${f.need.A} attaccanti. Non si cambia.</p>`;
     else if(R_.need && mant) rosterHTML=`<p class="dim" style="margin:0">${tot} calciatori: ${f.need.P} portieri e ${f.need.F} senza vincoli di ruolo. Non si cambia.</p>`;
     else if(mant) rosterHTML=`<div class="frow" style="margin:6px 0"><span class="lbl" style="min-width:150px">Portieri (2-4)</span>${step('needP',f.need.P,mP()[0],mP()[1])}</div>
          <div class="frow" style="margin:6px 0"><span class="lbl" style="min-width:150px">Di movimento (liberi)</span>${step('needF',f.need.F,mF()[0],mF()[1])}</div>
@@ -1137,7 +1141,7 @@ function openCreate(mode){
     openSheet(`<div class="cwrap"><h2>Crea tavolo · ${m.name}</h2>
       <div class="cf"><span class="lbl">Visibilità</span><div class="frow"><button class="chip ${!f.priv?'on':''}" data-priv="0">Pubblico</button><button class="chip ${f.priv?'on':''}" data-priv="1">Privato</button></div>
         <p class="dim cn">${f.priv?'Non compare nell’elenco: entra chi ha il codice.':'Compare nell’elenco: chiunque può sedersi.'}</p></div>
-      <div class="cf"><span class="lbl">Ruoli</span><div class="frow"><button class="chip ${!mant?'on':''}" data-roles="classic">Classic</button>${mode==='super'?'<button class="chip off" data-soon="Il Superturbo si gioca con i ruoli Classic">Mantra</button>':`<button class="chip ${mant?'on':''}" data-roles="mantra">Mantra</button>`}</div>
+      <div class="cf"><span class="lbl">Ruoli</span><div class="frow"><button class="chip ${!mant?'on':''}" data-roles="classic">Classic</button>${NOLU(mode)?'<button class="chip off" data-soon="Questa asta si gioca con i ruoli Classic">Mantra</button>':`<button class="chip ${mant?'on':''}" data-roles="mantra">Mantra</button>`}</div>
         <p class="dim cn">${mant?'Mantra: rosa senza vincoli di ruolo (almeno 2 portieri). Ogni calciatore ha i suoi ruoli Mantra.':'Classic: portieri, difensori, centrocampisti, attaccanti.'}</p></div>
       <div class="cf"><span class="lbl">Chiamata</span><div class="frow"><button class="chip ${f.call==='random'?'on':''}" data-call="random">Random</button><button class="chip ${f.call==='chiamata'?'on':''}" data-call="chiamata">A chiamata</button><button class="chip ${f.call==='draft'?'on':''}" data-call="draft">Draft</button></div>
         <p class="dim cn">${CALL_INFO[f.call]}</p></div>
@@ -1242,7 +1246,7 @@ function ovalHTML(center, slots, meIdx, info){
 
 /* ---------- STANZA (sala d'attesa + asta) ---------- */
 let RV = null, R = null, SEATS = [], POOL = [], LOG = [];
-const open = s=>['P','D','C','A','F'].reduce((a,r)=>a+((s.need&&s.need[r])||0),0);
+const open = s=>['P','D','C','A','F','X'].reduce((a,r)=>a+((s.need&&s.need[r])||0),0);
 const maxBid = s=>open(s)>0 ? s.credits-(open(s)-1) : 0;
 const sName = i=>(SEATS.find(s=>s.seat===i)||{}).name||'';
 const meSeat = ()=>SEATS.find(s=>s.user_id===ME);
@@ -1397,6 +1401,11 @@ function rosterHTML(){
   const mine=POOL.filter(p=>p.owner_seat===me.seat);
   const rows=[], mant=('F' in me.need);
   const tag=p=>`${p.team?` <small class="tm">${p.team}</small>`:''}`;
+  if('X' in me.need){
+    mine.forEach(p=>rows.push(`<div class="rrow">${rb(p,false)}${p.name}${tag(p)}<span class="p">${p.price}</span></div>`));
+    for(let k=0;k<me.need.X;k++) rows.push(`<div class="rrow empty"><span class="role">\u2022</span>posto libero</div>`);
+    return `<details class="roster"><summary>La mia rosa</summary>${rows.join('')}</details>`;
+  }
   for(const r of ['P','D','C','A']){
     mine.filter(p=>p.role===r).forEach(p=>rows.push(`<div class="rrow">${rb(p,mant)}${p.name}${tag(p)}<span class="p">${p.price}</span></div>`));
     if(!mant) for(let k=0;k<(me.need[r]||0);k++) rows.push(`<div class="rrow empty"><span class="role ${r}">${r}</span>da acquistare</div>`);
@@ -1530,7 +1539,7 @@ function renderFinished(){
     RV.saved=true;
     const me=meSeat();
     if(me){
-      STORE.history.unshift({ts:Date.now(), table:'Tavolo '+cfg.code, mode:cfg.mode, scope:'', room:cfg.id, lineup:(cfg.mode!=='super'), credits:cfg.credits, spent:cfg.credits-me.credits,
+      STORE.history.unshift({ts:Date.now(), table:'Tavolo '+cfg.code, mode:cfg.mode, scope:'', room:cfg.id, lineup:!NOLU(cfg.mode), credits:cfg.credits, spent:cfg.credits-me.credits,
         roles:cfg.roles, roster:POOL.filter(p=>p.owner_seat===me.seat).map(p=>({name:p.name,role:p.role,rm:p.rm,price:p.price}))});
       STORE.history=STORE.history.slice(0,30); saveStore();
     }
@@ -1547,7 +1556,7 @@ function renderFinished(){
         ${['P','D','C','A'].flatMap(r=>POOL.filter(p=>p.owner_seat===s.seat&&p.role===r)).map(p=>`<div class="rrow">${rb(p,cfg.roles==='mantra')}${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="p">${p.price}</span></div>`).join('')}
       </div>`;
     }).join('')}
-    <div style="display:grid;gap:8px;margin-top:18px">${(cfg.mode!=='super'&&meSeat())?'<button class="btn wide" id="lineup">Schiera la formazione</button>':''}<button class="btn wide ${(cfg.mode!=='super')?'ghost':''}" id="again">Torna alla Home</button></div>
+    <div style="display:grid;gap:8px;margin-top:18px">${(!NOLU(cfg.mode)&&meSeat())?'<button class="btn wide" id="lineup">Schiera la formazione</button>':''}<button class="btn wide ${(cfg.mode!=='super')?'ghost':''}" id="again">Torna alla Home</button></div>
     <p class="note">${cfg.mode==='classic'?'Prossimo passo: dare un punteggio alle rose con i voti della giornata e fare una classifica.':'Questa rosa vale solo per la giornata o la partita del tavolo. Poi si azzera e puoi rifare un\u2019asta.'}</p>`;
   document.getElementById('again').onclick=()=>{ leaveRoomView(); showHome(); };
   const lb=document.getElementById('lineup'); if(lb) lb.onclick=()=>{ const id=cfg.id; leaveRoomView(); showLineup(id); };
@@ -1754,7 +1763,8 @@ function showHow(){
         ['Classic','Ruoli semplici: portiere, difensore, centrocampista, attaccante.'],
     ['Mantra','Ruoli specifici, come difensore centrale o esterno.'],
     ['Turbo','18 calciatori a squadra, valida da 1 a 3 giornate.'],
-    ['Superturbo','Solo 4 calciatori, uno per ruolo, valida da 1 a 3 giornate.'],
+    ['Minifoot','6 calciatori: 1 portiere, 2 difensori, 2 centrocampisti, 1 attaccante, valida da 1 a 3 giornate.'],
+    ['Scorpione','3 contro 3: 3 calciatori con ruoli liberi, anche senza portiere, valida da 1 a 3 giornate.'],
     ['Tavolo privato','Non compare nell\u2019elenco: ci entra chi ha il codice di 4 lettere.']
   ];
   pageShell('Come funziona',`
