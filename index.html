@@ -2029,6 +2029,7 @@ function showRanking(){
   pageShell('Classifica',`<div class="empty-state">${IC.cup}<h2>La classifica parte con i voti</h2><p class="dim">Dopo ogni giornata le rose prendono i voti dei calciatori e si sfidano. Questa parte la colleghiamo appena abbiamo una fonte dei voti.</p><button class="btn wide ghost" id="go" style="margin-top:16px">Torna alle aste</button></div>`,'rank');
   document.getElementById('go').onclick=showAste;
 }
+const SUPPORT_EMAIL='giulianodp.gdp@gmail.com';
 function showProfile(){
   const h=STORE.history;
   const players=h.reduce((a,x)=>a+x.roster.length,0);
@@ -2044,9 +2045,33 @@ function showProfile(){
     </div>
     ${accountCardHTML()}
     <button class="btn wide" id="chn">${STORE.name?'Cambia nome':'Scegli il tuo nome'}</button>
+    <h2 class="sec" style="font-size:22px">Impostazioni e assistenza</h2>
+    <div class="menu">${AUTH.anon?'':'<button id="pw-ch">'+IC.user+'Cambia password</button>'}<button id="pv">${IC.info}Privacy e dati</button><button id="sup">${IC.chat}Supporto</button><button id="acc-del" style="color:#ff9aa2">${IC.user}Elimina il mio account</button></div>
     ${h.length?'<button class="btn wide ghost" id="clr" style="margin-top:10px">Cancella lo storico</button>':''}`,'prof');
   document.getElementById('chn').onclick=openNameSheet;
   bindAccountCard();
+  const gp=x=>document.getElementById(x);
+  if(gp('pw-ch')) gp('pw-ch').onclick=()=>{
+    openSheet(`<h2>Cambia password</h2><input id="np1" class="inp" type="password" minlength="8" placeholder="Nuova password (almeno 8 caratteri)" autocomplete="new-password"><button class="btn wide" id="np-ok" style="margin-top:12px">Salva</button>`);
+    gp('np-ok').onclick=async()=>{ const v=gp('np1').value; if(v.length<8){ toast('Almeno 8 caratteri'); return; } try{ const {error}=await sb.auth.updateUser({password:v}); if(error) throw error; closeSheet(); toast('Password cambiata'); }catch(e){ toast(authErr(e)); } };
+  };
+  gp('pv').onclick=()=>{
+    openSheet(`<h2>Privacy e dati</h2><div class="gloss"><b>Cosa conserviamo</b><span>Il tuo nome, l\u2019email se ti registri, le leghe e i tavoli a cui partecipi, il portafoglio di \u20ac virtuali.</span></div>
+      <div class="gloss"><b>\u20ac virtuali</b><span>Non hanno valore reale: non si comprano, non si convertono e non si prelevano.</span></div>
+      <div class="gloss"><b>Chi vede cosa</b><span>Gli altri giocatori vedono il tuo nome, la squadra e le tue rose. Il tuo codice amico lo condividi tu.</span></div>
+      <div class="gloss"><b>I tuoi diritti</b><span>Puoi eliminare il tuo account in ogni momento dal profilo.</span></div>
+      <p class="dim" style="font-size:12px;margin:10px 0">Testo di prova: prima del lancio pubblico va sostituito con l\u2019informativa privacy completa.</p><button class="btn wide" data-close>Chiudi</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+  };
+  gp('sup').onclick=()=>{
+    openSheet(`<h2>Supporto</h2><p class="dim" style="margin:6px 0 12px">Hai un problema o un suggerimento? Scrivici: rispondiamo appena possibile.</p><a class="btn wide" style="display:block;text-align:center;text-decoration:none" href="mailto:${SUPPORT_EMAIL}?subject=FantaManiac%20supporto">Scrivi al supporto</a><button class="btn wide ghost" data-close style="margin-top:8px">Chiudi</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+  };
+  gp('acc-del').onclick=()=>{
+    openSheet(`<h2>Eliminare l\u2019account?</h2><p class="dim" style="margin:6px 0 12px">Esci da tutte le leghe, perdi gli amici e il portafoglio. Il nome viene cancellato. Non si pu\u00f2 annullare.</p><button class="btn wide" id="ad-ok" style="background:#e5534b;color:#fff">S\u00ec, elimina tutto</button><button class="btn wide ghost" data-close style="margin-top:8px">Annulla</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    gp('ad-ok').onclick=async()=>{ try{ await rpc('close_account'); await sb.auth.signOut(); STORE.leagueId=null; STORE.name=''; STORE.history=[]; saveStore(); location.reload(); }catch(e){ toast(errMsg(e)); } };
+  };
   const c=document.getElementById('clr'); if(c) c.onclick=()=>{ STORE.history=[]; saveStore(); toast('Storico cancellato'); showProfile(); };
 }
 
