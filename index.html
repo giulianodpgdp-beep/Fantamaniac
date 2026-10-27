@@ -400,6 +400,8 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .swt{width:58px;height:32px;border-radius:999px;background:#1a3a55;border:2px solid #8a94a8;position:relative;flex:none}
 .swt i{position:absolute;top:3px;left:4px;width:22px;height:22px;border-radius:50%;background:#8a94a8;transition:.15s}
 .swt.on{background:#1f7a3c;border-color:#a8e6b8}.swt.on i{left:30px;background:#fff}
+.walpill{height:36px;padding:0 12px;border-radius:999px;background:#0e3b22;border:1.5px solid #2f9e4f;font-weight:700;font-size:14px;white-space:nowrap}
+.walbig{font-family:'Barlow Condensed',sans-serif;font-size:52px;font-weight:700;text-align:center;margin:4px 0}
 </style>
 </head>
 <body>
@@ -481,9 +483,9 @@ let _lid=0;
 const logoSVG=(sz)=>MARK_SVG.replace(/SZ/g,sz).replace(/bc-ID/g,'bc'+(++_lid));
 const LOGO = logoSVG(44);
 const MODES = [
-  {id:'asta-turbo',      name:'Asta Turbo',      ic:'bolt',   g:'g5', desc:'18 calciatori a squadra, valida per 1-3 giornate.', ready:true, novita:true, key:'turbo'},
-  {id:'asta-minifoot', name:'Asta Minifoot', ic:'target', g:'g6', desc:'6 calciatori: 1 portiere, 2 difensori, 2 centrocampisti, 1 attaccante. Valida per 1-3 giornate.', ready:true, novita:true, key:'super'},
-  {id:'asta-scorpione', name:'Asta Scorpion', ic:'pitch', g:'g2', desc:'3 contro 3: scegli 3 calciatori con i ruoli che vuoi, anche senza portiere. Valida per 1-3 giornate.', ready:true, novita:true, key:'scorpione'},
+  {id:'asta-turbo',      name:'Asta Turbo',      ic:'bolt',   g:'g5', desc:'18 calciatori a squadra, valida per la prossima giornata.', ready:true, novita:true, key:'turbo'},
+  {id:'asta-minifoot', name:'Asta Minifoot', ic:'target', g:'g6', desc:'6 calciatori: 1 portiere, 2 difensori, 2 centrocampisti, 1 attaccante. Valida per la prossima giornata.', ready:true, novita:true, key:'super'},
+  {id:'asta-scorpione', name:'Asta Scorpion', ic:'pitch', g:'g2', desc:'3 contro 3: scegli 3 calciatori con i ruoli che vuoi, anche senza portiere. Valida per la prossima giornata.', ready:true, novita:true, key:'scorpione'},
   {id:'asta-classic',    name:'Asta Classica',   ic:'gavel',  g:'g1', desc:'L\u2019asta di stagione: scegli tu la rosa.', ready:true, key:'classic'}
 ];
 const modeName = k=>(MODES.find(m=>m.key===k)||{}).name||'Asta';
@@ -510,10 +512,11 @@ function bindChips(){
 }
 function headerHTML(){
   return `<div class="hdr"><div class="l">${LOGO}<span class="name">Fanta<b>Maniac</b></span></div>
-    <div style="display:flex;align-items:center;gap:6px">${STORE.name?`<button class="avbtn" id="login" aria-label="Profilo di ${STORE.name}">${STORE.name[0].toUpperCase()}</button>`:`<button class="login" id="login">Accedi</button>`}<button class="burger" id="burger" aria-label="Menu">${IC.burger}</button></div></div>`;
+    <div style="display:flex;align-items:center;gap:6px">${walletPill()}${STORE.name?`<button class="avbtn" id="login" aria-label="Profilo di ${STORE.name}">${STORE.name[0].toUpperCase()}</button>`:`<button class="login" id="login">Accedi</button>`}<button class="burger" id="burger" aria-label="Menu">${IC.burger}</button></div></div>`;
 }
 function bindHeader(){
   document.getElementById('login').onclick=()=>{ STORE.name?showProfile():openNameSheet(); };
+  const wl=document.getElementById('wal'); if(wl) wl.onclick=openWallet;
   document.getElementById('burger').onclick=openMenu;
 }
 const HERO_ART = '<svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true"><defs><linearGradient id="gd" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffe08a"/><stop offset="1" stop-color="#b8791a"/></linearGradient></defs><circle cx="64" cy="64" r="60" fill="#241606" stroke="url(#gd)" stroke-width="5"/><circle cx="64" cy="64" r="50" fill="none" stroke="#e8b04a" stroke-width="1.5" stroke-dasharray="3 4"/><text x="64" y="50" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="700" font-size="30" fill="url(#gd)">ASTA</text><circle cx="64" cy="70" r="14" fill="#fff"/><path d="M64 61l6 4.3-2.3 6.8h-7.4l-2.3-6.8z" fill="#111"/><text x="64" y="106" text-anchor="middle" font-family="Barlow Condensed,Arial Narrow,sans-serif" font-weight="700" font-size="24" fill="#ff5a4d">LIVE</text></svg>';
@@ -876,7 +879,7 @@ async function showHome(){
   let body;
   if(!cur){
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
-      <div class="ttl"><b>Home</b><span class="dim">Dashboard</span></div><span style="width:48px"></span></div>
+      <div class="ttl"><b>Home</b><span class="dim">Dashboard</span></div>${walletPill()}</div>
       <div class="empty-state" style="margin-top:18px">${IC.league}<h2>Non hai ancora una lega</h2><p class="dim">Con gli amici: crea una lega privata e fai l\u2019asta quando volete. Con tutti: siediti a un tavolo pubblico, come al poker.</p>
         <button class="btn wide" id="newlg" style="margin-top:16px">Crea o unisciti a una lega</button></div>
       ${resumeHTML()}
@@ -900,7 +903,7 @@ async function showHome(){
     }
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
       <div class="ttl"><b>${l.name}</b><span class="dim">${l.owner===ME?'Superadmin':mine?'Admin':'Membro'}</span></div>
-      <button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button><button class="ibtn" id="dchat" aria-label="Chat">${IC.chat}</button></div>
+      ${walletPill()}<button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button></div>
     <button class="lsel" id="lsel"><span>${l.name}</span>${IC.chev}</button>
     <section class="stage" aria-label="La mia squadra">
       <div class="tname">${tn}</div>${JERSEY}
@@ -912,11 +915,13 @@ async function showHome(){
     ${r&&r.status!=='done'&&cur.seat?'':resumeHTML()}${hotHTML}
     <p class="note">Invita gli amici con il pulsante di condivisione: il codice della lega \u00e8 <b>${l.code}</b>. Punteggi e classifica arrivano quando colleghiamo i voti della Serie A.</p>`;
   }
+  if(AUTH.anon) body+=`<div class="strip" style="margin-top:14px"><div class="t"><b>Salva il tuo account</b><span>Registrati con email: non perdi pi\u00f9 leghe e crediti.</span></div><button class="btn" id="accbn">Registrati</button></div>`;
   $app.innerHTML=body;
+  if(document.getElementById('accbn')) document.getElementById('accbn').onclick=()=>openAuthSheet('reg');
   document.getElementById('dmenu').onclick=openMenu;
   const g=id=>document.getElementById(id);
   if(g('dbell')) g('dbell').onclick=()=>toast('Nessuna notifica');
-  if(g('dchat')) g('dchat').onclick=()=>toast('Chat di lega: in arrivo');
+  if(g('wal')) g('wal').onclick=openWallet;
   if(g('dshare')) g('dshare').onclick=()=>leagueInvite(cur.lg);
   if(g('dset')) g('dset').onclick=()=>showLeagueProfile(cur.lg.id);
   if(g('go')) g('go').onclick=showAste;
@@ -958,9 +963,9 @@ const CALL_INFO = {
 const ROLE_NAME_LONG = {P:'portieri',D:'difensori',C:'centrocampisti',A:'attaccanti'};
 // per ogni tipo di asta: limiti scelti insieme
 const RULES = {
-  turbo:  {seats:[2,20], credits:[100,5000], need:{P:2,D:6,C:6,A:4}, days:false},
-  super:  {seats:[2,50], credits:[100,500],  need:{P:1,D:2,C:2,A:1}, days:false},
-  scorpione:{seats:[2,50], credits:[100,500],  need:{X:3}, days:false},
+  turbo:  {seats:[2,14], opts:[2,4,6,8,10,12,14], credits:[100,5000], need:{P:2,D:6,C:6,A:4}, days:false},
+  super:  {seats:[2,20], opts:[2,4,6,8,10,12,14,20], credits:[100,500],  need:{P:1,D:2,C:2,A:1}, days:false},
+  scorpione:{seats:[2,50], opts:[2,4,6,8,10,12,14,20,30,40,50], credits:[100,500],  need:{X:3}, days:false},
   classic:{seats:[2,20], credits:[100,5000], need:null, days:false}
 };
 // quanti calciatori ci sono per ruolo nel database (limita rosa x persone)
@@ -1145,7 +1150,7 @@ function openCreate(mode){
         <p class="dim cn">${mant?'Mantra: rosa senza vincoli di ruolo (almeno 2 portieri). Ogni calciatore ha i suoi ruoli Mantra.':'Classic: portieri, difensori, centrocampisti, attaccanti.'}</p></div>
       <div class="cf"><span class="lbl">Chiamata</span><div class="frow"><button class="chip ${f.call==='random'?'on':''}" data-call="random">Random</button><button class="chip ${f.call==='chiamata'?'on':''}" data-call="chiamata">A chiamata</button><button class="chip ${f.call==='draft'?'on':''}" data-call="draft">Draft</button></div>
         <p class="dim cn">${CALL_INFO[f.call]}</p></div>
-      <div class="cf"><span class="lbl">Persone (${R_.seats[0]}-${R_.seats[1]})</span>${step('seats',f.seats,R_.seats[0],R_.seats[1])}</div>
+      <div class="cf"><span class="lbl">Persone</span>${R_.opts?`<div class="frow" style="flex-wrap:wrap">${R_.opts.map(n=>`<button class="chip ${f.seats===n?'on':''}" data-seat="${n}">${n}</button>`).join('')}</div>`:step('seats',f.seats,R_.seats[0],R_.seats[1])}</div>
       <div class="cf"><span class="lbl">Crediti a testa (${R_.credits[0]}-${R_.credits[1]})</span>${step('credits',f.credits,R_.credits[0],R_.credits[1])}${f.call==='draft'?'<p class="dim cn">Nel draft i crediti non si spendono: servono solo a dare un valore ai calciatori.</p>':''}</div>
       <div class="cf"><span class="lbl">Timer offerta (3-30 secondi)</span>${step('timer',f.timer,3,30,'s')}</div>
       ${R_.days?`<div class="cf"><span class="lbl">Giornate di validità</span><div class="frow">${[1,2,3].map(n=>`<button class="chip ${f.days===n?'on':''}" data-days="${n}">${n}</button>`).join('')}</div></div>`:''}
@@ -1157,6 +1162,7 @@ function openCreate(mode){
     q('[data-roles]').forEach(b=>b.onclick=()=>{ if(NEWLG){ toast('I ruoli sono quelli della lega'); return; } setRoles(b.dataset.roles); draw(); });
     q('[data-call]').forEach(b=>b.onclick=()=>{ f.call=b.dataset.call; draw(); });
     q('[data-days]').forEach(b=>b.onclick=()=>{ f.days=+b.dataset.days; draw(); });
+    q('[data-seat]').forEach(b=>b.onclick=()=>{ f.seats=+b.dataset.seat; draw(); });
     q('[data-soon]').forEach(b=>b.onclick=()=>toast(b.dataset.soon));
     const lim={seats:R_.seats,credits:R_.credits,timer:[3,30]};
     const setv=(k,v)=>{
@@ -1689,6 +1695,92 @@ function luPick(i){
   const fr=document.getElementById('lu-free'); if(fr) fr.onclick=()=>{ LU.slots[i]=null; luRebench(); LU.saved=false; closeSheet(); renderLineup(); };
 }
 
+
+/* ---------- ACCOUNT (email) E PORTAFOGLIO ---------- */
+let AUTH={anon:true,email:''}, WALLET={cents:null,can:false};
+const eur = c=>'€ '+((c||0)/100).toFixed(2).replace('.',',');
+async function fetchWallet(){
+  try{ const d=await rpc('get_wallet'); const r=Array.isArray(d)?d[0]:d; if(r){ WALLET.cents=+r.balance_cents; WALLET.can=!!r.can_refill; } }catch(e){}
+}
+function walletPill(){ return WALLET.cents==null?'':`<button class="walpill" id="wal" aria-label="Portafoglio">${eur(WALLET.cents)}</button>`; }
+async function openWallet(){
+  await fetchWallet();
+  let rows=[]; try{ const {data}=await sb.from('ledger').select('kind,amount_cents,note,created_at').order('id',{ascending:false}).limit(12); rows=data||[]; }catch(e){}
+  const lab={signup:'Benvenuto',refill:'Rifornimento',buyin:'Buy-in',refund:'Rimborso',prize:'Premio',adjust:'Correzione'};
+  openSheet(`<h2>Portafoglio</h2><div class="walbig">${eur(WALLET.cents)}</div><p class="dim" style="text-align:center;margin:0 0 10px">€ virtuali: si usano solo nei tavoli, non si convertono in denaro.</p>
+    ${WALLET.can?`<button class="btn wide" id="wrf">Ritira il rifornimento giornaliero</button>`:`<p class="note" style="margin:0 0 8px">Il rifornimento giornaliero è per chi ha 0 €.</p>`}
+    <div class="cf"><span class="lbl">Ultimi movimenti</span>${rows.map(r=>`<div class="rrow"><span>${lab[r.kind]||r.kind}</span><span class="p" style="color:${r.amount_cents<0?'#ff9aa2':'#7ee08c'}">${r.amount_cents<0?'−':'+'}${eur(Math.abs(r.amount_cents))}</span></div>`).join('')||'<p class="dim">Nessun movimento.</p>'}</div>
+    <button class="btn wide ghost" data-close style="margin-top:10px">Chiudi</button>`);
+  document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+  const b=document.getElementById('wrf'); if(b) b.onclick=async()=>{ try{ await rpc('claim_refill'); toast('Rifornimento ricevuto'); closeSheet(); await fetchWallet(); route_refresh(); }catch(e){ toast(errMsg(e)); } };
+}
+function route_refresh(){ if(document.querySelector('.dhead')) showHome(); }
+function accountCardHTML(){
+  return AUTH.anon
+    ? `<div class="rcard" style="margin-bottom:12px"><h3>Salva il tuo account</h3><p class="dim" style="margin:0 0 10px">Ora giochi come ospite: se cambi telefono o cancelli i dati perdi leghe e € virtuali. Con l’email li ritrovi ovunque.</p>
+        <button class="btn wide" id="acc-reg">Registrati con email</button><button class="btn wide ghost" id="acc-in" style="margin-top:8px">Ho già un account</button></div>`
+    : `<div class="rcard" style="margin-bottom:12px"><h3>Account</h3><p class="dim" style="margin:0 0 10px">${AUTH.email}</p><button class="btn wide ghost" id="acc-out">Esci dall’account</button></div>`;
+}
+function bindAccountCard(){
+  const g=x=>document.getElementById(x);
+  if(g('acc-reg')) g('acc-reg').onclick=()=>openAuthSheet('reg');
+  if(g('acc-in')) g('acc-in').onclick=()=>openAuthSheet('in');
+  if(g('acc-out')) g('acc-out').onclick=()=>{
+    openSheet(`<h2>Uscire dall’account?</h2><p class="dim" style="margin:6px 0 12px">Potrai rientrare con email e password. Su questo telefono continuerai come nuovo ospite.</p>
+      <button class="btn wide" id="lo-ok">Esci</button><button class="btn wide ghost" data-close style="margin-top:8px">Annulla</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    g('lo-ok').onclick=async()=>{ try{ await sb.auth.signOut(); STORE.leagueId=null; STORE.name=''; saveStore(); location.reload(); }catch(e){ toast(errMsg(e)); } };
+  };
+}
+function authErr(e){
+  const m=((e&&e.message)||'').toLowerCase();
+  if(m.includes('invalid login')) return 'Email o password errate';
+  if(m.includes('already')||m.includes('registered')) return 'Questa email è già registrata: usa "Ho già un account"';
+  if(m.includes('password')&&m.includes('characters')) return 'La password deve avere almeno 8 caratteri';
+  if(m.includes('rate')||m.includes('seconds')) return 'Troppi tentativi: riprova tra poco';
+  return errMsg(e);
+}
+function openAuthSheet(mode){
+  const reg=mode==='reg';
+  openSheet(`<h2>${reg?'Registrati con email':'Accedi'}</h2>
+    <p class="dim" style="margin:6px 0 12px">${reg?'Il tuo account di ospite diventa permanente: leghe, nome e € virtuali restano tuoi.':'Attenzione: entrando in un altro account, quello da ospite di questo telefono non si recupera.'}</p>
+    <input id="au-em" class="inp" type="email" inputmode="email" autocomplete="email" placeholder="Email" style="margin-bottom:8px">
+    <input id="au-pw" class="inp" type="password" autocomplete="${reg?'new-password':'current-password'}" placeholder="Password (almeno 8 caratteri)">
+    <button class="btn wide" id="au-go" style="margin-top:12px">${reg?'Registrati':'Accedi'}</button>
+    ${reg?'':'<button class="btn wide ghost" id="au-fg" style="margin-top:8px">Password dimenticata</button>'}
+    <button class="btn wide ghost" id="au-sw" style="margin-top:8px">${reg?'Ho già un account':'Non ho un account: registrati'}</button>`);
+  const g=x=>document.getElementById(x), val=()=>({e:g('au-em').value.trim(),p:g('au-pw').value});
+  g('au-sw').onclick=()=>openAuthSheet(reg?'in':'reg');
+  if(g('au-fg')) g('au-fg').onclick=async()=>{ const {e}=val(); if(!e){ toast('Scrivi la tua email'); return; }
+    try{ const {error}=await sb.auth.resetPasswordForEmail(e,{redirectTo:location.origin+location.pathname}); if(error) throw error; closeSheet(); toast('Ti ho scritto: segui il link nella email'); }catch(x){ toast(authErr(x)); } };
+  g('au-go').onclick=async()=>{
+    const {e,p}=val();
+    if(!/^\S+@\S+\.\S+$/.test(e)){ toast('Email non valida'); return; }
+    if(p.length<8){ toast('La password deve avere almeno 8 caratteri'); return; }
+    g('au-go').disabled=true;
+    try{
+      if(reg){
+        const {data,error}=await sb.auth.updateUser({email:e,password:p});
+        if(error) throw error;
+        const {data:{session}}=await sb.auth.getSession();
+        AUTH.anon=!!(session&&session.user.is_anonymous); AUTH.email=(session&&session.user.email)||'';
+        closeSheet();
+        if(AUTH.anon) toast('Ti ho scritto: conferma la email per completare'); else toast('Account salvato');
+        if(document.querySelector('.prof-h')) showProfile(); else showHome();
+      } else {
+        const {error}=await sb.auth.signInWithPassword({email:e,password:p});
+        if(error) throw error;
+        STORE.leagueId=null; saveStore(); location.reload();
+      }
+    }catch(x){ toast(authErr(x)); g('au-go').disabled=false; }
+  };
+}
+function openNewPassSheet(){
+  openSheet(`<h2>Nuova password</h2><input id="np" class="inp" type="password" autocomplete="new-password" placeholder="Almeno 8 caratteri"><button class="btn wide" id="np-ok" style="margin-top:12px">Salva</button>`);
+  document.getElementById('np-ok').onclick=async()=>{ const p=document.getElementById('np').value; if(p.length<8){ toast('Almeno 8 caratteri'); return; }
+    try{ const {error}=await sb.auth.updateUser({password:p}); if(error) throw error; closeSheet(); toast('Password aggiornata'); }catch(e){ toast(authErr(e)); } };
+}
+
 /* ---------- AVVIO ---------- */
 function showSetup(){
   setNav(false);
@@ -1729,10 +1821,12 @@ async function boot(){
     sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY,{auth:{persistSession:true,autoRefreshToken:true}});
     let {data:{session}}=await sb.auth.getSession();
     if(!session){ const r=await sb.auth.signInAnonymously(); if(r.error) throw r.error; session=r.data.session; }
-    ME=session.user.id;
+    ME=session.user.id; AUTH.anon=!!session.user.is_anonymous; AUTH.email=session.user.email||'';
+    sb.auth.onAuthStateChange((ev)=>{ if(ev==='PASSWORD_RECOVERY') setTimeout(openNewPassSheet,300); });
     const {data:p}=await sb.from('players').select('name').eq('id',ME).maybeSingle();
     STORE.name=(p&&p.name)||''; saveStore();
     const t=await rpc('server_now'); SKEW=new Date(t).getTime()-Date.now();
+    await fetchWallet();
   }catch(e){ return showNetError(e); }
   await fetchOpenRooms();
   const lcode=new URLSearchParams(location.search).get('l');
@@ -1762,9 +1856,9 @@ function showHow(){
     ['Asta','I calciatori vengono chiamati uno alla volta e vince chi offre di pi\u00f9.'],
         ['Classic','Ruoli semplici: portiere, difensore, centrocampista, attaccante.'],
     ['Mantra','Ruoli specifici, come difensore centrale o esterno.'],
-    ['Turbo','18 calciatori a squadra, valida da 1 a 3 giornate.'],
-    ['Minifoot','6 calciatori: 1 portiere, 2 difensori, 2 centrocampisti, 1 attaccante, valida da 1 a 3 giornate.'],
-    ['Scorpion','3 contro 3: 3 calciatori con ruoli liberi, anche senza portiere, valida da 1 a 3 giornate.'],
+    ['Turbo','18 calciatori a squadra, valida per la prossima giornata.'],
+    ['Minifoot','6 calciatori: 1 portiere, 2 difensori, 2 centrocampisti, 1 attaccante, valida per la prossima giornata.'],
+    ['Scorpion','3 contro 3: 3 calciatori con ruoli liberi, anche senza portiere, valida per la prossima giornata.'],
     ['Tavolo privato','Non compare nell\u2019elenco: ci entra chi ha il codice di 4 lettere.']
   ];
   pageShell('Come funziona',`
@@ -1805,9 +1899,11 @@ function showProfile(){
       <div class="stat"><b>${top?top.price:'-'}</b><span>${top?'prezzo pi\u00f9 alto ('+top.name+')':'prezzo pi\u00f9 alto'}</span></div>
       <div class="stat"><b>${h.length?Math.round(h.reduce((a,x)=>a+x.spent,0)/h.length):'-'}</b><span>crediti spesi in media</span></div>
     </div>
+    ${accountCardHTML()}
     <button class="btn wide" id="chn">${STORE.name?'Cambia nome':'Scegli il tuo nome'}</button>
     ${h.length?'<button class="btn wide ghost" id="clr" style="margin-top:10px">Cancella lo storico</button>':''}`,'prof');
   document.getElementById('chn').onclick=openNameSheet;
+  bindAccountCard();
   const c=document.getElementById('clr'); if(c) c.onclick=()=>{ STORE.history=[]; saveStore(); toast('Storico cancellato'); showProfile(); };
 }
 
