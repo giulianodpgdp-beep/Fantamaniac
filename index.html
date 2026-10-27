@@ -2188,8 +2188,8 @@ function showProfile(){
     }
   }
   function lines(a){
-    cx.strokeStyle='rgba(255,255,255,'+a+')'; cx.lineWidth=2.2; cx.lineCap='butt';
-    const m=16, bw=W*0.62, bx=(W-bw)/2, bh=H*0.13, sw=W*0.3, sx=(W-sw)/2, sh=H*0.05;
+    cx.strokeStyle='rgba(255,255,255,'+a+')'; cx.lineWidth=3.2; cx.lineCap='butt';
+    const m=6, bw=W*0.62, bx=(W-bw)/2, bh=H*0.13, sw=W*0.3, sx=(W-sw)/2, sh=H*0.05;
     cx.beginPath();
     cx.rect(m,m,W-2*m,H-2*m);
     cx.moveTo(m,H/2); cx.lineTo(W-m,H/2);
@@ -2205,7 +2205,7 @@ function showProfile(){
     const s=t/1000;
     cx.fillStyle='#06180c'; cx.fillRect(0,0,W,H);
     for(let y=0;y<H;y+=80){ cx.fillStyle=(y/80)%2?'rgba(40,120,50,.07)':'rgba(0,0,0,.10)'; cx.fillRect(0,y,W,80); }
-    lines(.30);
+    lines(.75);
     cx.lineWidth=1.7; cx.lineCap='round';
     for(let c=0;c<COL.length;c++){
       cx.strokeStyle=COL[c]; cx.beginPath();
@@ -2217,6 +2217,7 @@ function showProfile(){
       }
       cx.stroke();
     }
+    lines(.22);
   }
   function want(){ return !document.querySelector('.sgtheme') && !document.hidden; }
   function check(){
