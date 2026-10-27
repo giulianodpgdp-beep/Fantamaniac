@@ -457,6 +457,15 @@ function openMenu(){
   openSheet(`<h2>Menu</h2><div class="menu">${items.map(([k,l,ic])=>`<button data-go="${k}">${IC[ic]}${l}</button>`).join('')}</div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">${logoSVG(52)}<div><div class="disp" style="font-size:24px;font-style:italic">Fanta<span style="color:var(--chip)">Maniac</span></div><div class="dim" style="font-size:13px">Versione di prova: calciatori inventati, ingresso gratis con crediti virtuali.</div></div></div>`);
   document.querySelectorAll('#sheet [data-go]').forEach(b=>b.onclick=()=>{ closeSheet(); goTo(b.dataset.go); });
+  const cl=(typeof LEAGUES!=='undefined'&&LEAGUES.length)?(LEAGUES.find(x=>x.lg.id===STORE.leagueId)||LEAGUES[0]):null;
+  if(cl){
+    const adm=cl.lg.owner===ME||!!cl.me.is_admin;
+    const gi=[['notices','Comunicazioni'],...(adm?[['credits','Crediti'],['rosters','Gestione rose'],['lineups','Gestione formazioni']]:[])];
+    const box=document.createElement('div');
+    box.innerHTML=`<h3 style="margin:16px 0 6px;font-size:15px" class="dim">${adm?'Gestione':'Lega'} \u00b7 ${cl.lg.name}</h3><div class="menu">${gi.map(([k,l])=>`<button data-lm="${k}">${IC.league}${l}</button>`).join('')}</div>`;
+    document.querySelector('#sheet .menu').after(box);
+    box.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{ closeSheet(); ({notices:showNotices,credits:showCredits,rosters:showRosters,lineups:showLineups})[b.dataset.lm](cl.lg.id); });
+  }
 }
 function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends,classic:()=>showLobby('classic')})[k](); }
 
@@ -1655,18 +1664,18 @@ function luSetModule(m){
   luRebench();
 }
 const SHIRT='<svg viewBox="0 0 100 96" aria-hidden="true"><path d="M32 4L50 12L68 4L96 22L82 44L70 38V92H30V38L18 44L4 22Z"/></svg>';
-async function showLineup(roomId, md, from){
+async function showLineup(roomId, md, from, asUser){
   stopTick(); stopLobby(); setNav(false);
   $app.innerHTML='<div class="empty-l" style="padding-top:30vh">Carico la tua rosa…</div>';
   try{
     const {data:room}=await sb.from('rooms').select('*').eq('id',roomId).single();
-    const {data:seat}=await sb.from('seats').select('*').eq('room_id',roomId).eq('user_id',ME).maybeSingle();
+    const {data:seat}=await sb.from('seats').select('*').eq('room_id',roomId).eq('user_id',asUser||ME).maybeSingle();
     if(!room||!seat) throw new Error('Non trovo la tua rosa in questo tavolo');
     const {data:mine}=await sb.from('pool').select('*').eq('room_id',roomId).eq('owner_seat',seat.seat);
     md=md||1;
     const {data:ex}=await sb.from('lineups').select('*').eq('room_id',roomId).eq('seat',seat.seat).eq('md',md).maybeSingle();
     let st={}; if(room.league_id){ try{ const {data:lg}=await sb.from('leagues').select('settings').eq('id',room.league_id).maybeSingle(); st=(lg&&lg.settings)||{}; }catch(e){} }
-    LU={from:from||(LU&&LU.from)||'hist',room,seat:seat.seat,mine:mine||[],md,module:'4-4-2',slots:Array(11).fill(null),bench:[],saved:!!ex,set:st};
+    LU={as:asUser||null,from:from||(LU&&LU.from)||'hist',room,seat:seat.seat,mine:mine||[],md,module:'4-4-2',slots:Array(11).fill(null),bench:[],saved:!!ex,set:st};
     const mods=luMods(), first=(mods.includes('4-4-2')&&luFeasible('4-4-2')?'4-4-2':mods.find(luFeasible))||mods[0]||'4-4-2';
     if(ex && mods.includes(ex.module) && ex.starters.length===11){
       LU.module=ex.module; LU.slots=ex.starters.map(x=>luBy(x)?x:null); LU.bench=ex.bench||[]; luRebench();
@@ -1683,7 +1692,7 @@ function renderLineup(){
   const bn=L_.bench, cut=luBench();
   const benchRow=(pid,i)=>{ const p=luBy(pid); return `<div class="rrow bn ${i>=cut?'out':''}"><span class="bnn">${i+1}</span>${rb(p,mant)}${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="mv"><button data-up="${i}" ${i?'':'disabled'} aria-label="Su">▲</button><button data-dn="${i}" ${i<bn.length-1?'':'disabled'} aria-label="Giù">▼</button></span></div>`; };
   $app.innerHTML = `
-    <div class="tb"><button class="back" id="lu-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t">Formazione</h1><span style="width:48px"></span></div>
+    <div class="tb"><button class="back" id="lu-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t">Formazione${L_.as?' (per un altro)':''}</h1><span style="width:48px"></span></div>
     <p class="tag" style="margin-bottom:10px">${modeName(r_.mode)} · ${mant?'Mantra':'Classic'} · Tavolo ${r_.code}</p>
     ${r_.days>1?`<div class="frow" style="margin-bottom:10px"><span class="lbl">Giornata</span>${Array.from({length:r_.days},(_,i)=>`<button class="chip ${L_.md===i+1?'on':''}" data-md="${i+1}">${i+1}</button>`).join('')}</div>`:''}
     <div class="frow" style="margin-bottom:12px"><span class="lbl">Modulo</span>${luMods().map(m=>`<button class="chip ${m===L_.module?'on':''} ${luFeasible(m)?'':'off'}" data-mod="${m}">${m}</button>`).join('')}</div>
@@ -1694,8 +1703,8 @@ function renderLineup(){
     ${bn.map(benchRow).join('')||'<p class="dim">Nessun calciatore in panchina.</p>'}
     <button class="btn wide" id="lu-save" style="margin-top:16px">${L_.saved?'Aggiorna la formazione':'Salva la formazione'}</button>
     <p class="note">I punteggi arrivano quando colleghiamo i voti della Serie A. Intanto la formazione resta salvata.${mant?' La griglia dei ruoli per ogni modulo è ricostruita dalle regole di fantacalcio.it: se un posto ti sembra sbagliato, dimmelo.':''}</p>`;
-  document.getElementById('lu-back').onclick=()=>{ const f=LU.from; LU=null; f==='home'?showHome():showHistory(); };
-  $app.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>showLineup(r_.id,+b.dataset.md,L_.from));
+  document.getElementById('lu-back').onclick=()=>{ const f=LU.from, lid=LU.room.league_id; LU=null; f==='gest'?showLineups(lid):f==='home'?showHome():showHistory(); };
+  $app.querySelectorAll('[data-md]').forEach(b=>b.onclick=()=>showLineup(r_.id,+b.dataset.md,L_.from,L_.as));
   $app.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{
     if(!luFeasible(b.dataset.mod)){ toast('Con questa rosa non puoi usare questo modulo'); return; }
     luSetModule(b.dataset.mod); L_.saved=false; renderLineup(); });
@@ -1708,7 +1717,7 @@ function renderLineup(){
     if(mant && !L_.bench.slice(0,cut).some(pid=>luBy(pid).role==='P')){ toast('In panchina serve almeno un portiere tra i primi '+cut); return; }
     const bt=document.getElementById('lu-save'); bt.disabled=true;
     try{
-      await rpc('save_lineup',{p_room:r_.id,p_md:L_.md,p_module:L_.module,p_starters:L_.slots,p_bench:L_.bench});
+      await rpc(L_.as?'save_lineup_for':'save_lineup',{...(L_.as?{p_user:L_.as}:{}),p_room:r_.id,p_md:L_.md,p_module:L_.module,p_starters:L_.slots,p_bench:L_.bench});
       L_.saved=true; toast('Formazione salvata'); renderLineup();
     }catch(e){ toast(errMsg(e)); bt.disabled=false; }
   };
@@ -1746,6 +1755,69 @@ async function openWallet(){
   const b=document.getElementById('wrf'); if(b) b.onclick=async()=>{ try{ await rpc('claim_refill'); toast('Rifornimento ricevuto'); closeSheet(); await fetchWallet(); route_refresh(); }catch(e){ toast(errMsg(e)); } };
 }
 function route_refresh(){ if(document.querySelector('.dhead')) showHome(); }
+
+/* ---------- GESTIONE LEGA (admin) ---------- */
+async function gestCtx(id){
+  stopTick(); stopLobby(); G=null; setNav(false);
+  await fetchLeagues();
+  const cur=LEAGUES.find(x=>x.lg.id===id); if(!cur){ showHome(); return null; }
+  return {cur, l:cur.lg, adm:cur.lg.owner===ME||!!cur.me.is_admin};
+}
+const gestBar=t=>`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">${t}</h1><span style="width:34px"></span></div>`;
+const escH=t=>String(t==null?'':t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function gestTeams(c){
+  const r=c.cur.room;
+  if(!r||r.status!=='done') return null;
+  const [{data:seats},{data:mem}]=await Promise.all([sb.from('seats').select('seat,user_id,name,credits').eq('room_id',r.id).order('seat'),sb.from('league_members').select('user_id,team_name,name').eq('league_id',c.l.id).eq('removed',false)]);
+  const tn={}; (mem||[]).forEach(m=>tn[m.user_id]=m.team_name||((m.name||'Squadra')+' FC'));
+  return {room:r, seats:(seats||[]).filter(x=>x.user_id).map(x=>({...x,team:tn[x.user_id]||x.name+' FC'}))};
+}
+const needAuction=()=>`<p class="note" style="margin-top:14px">Questa sezione funziona dopo l\u2019asta della lega: appena l\u2019asta \u00e8 finita, qui trovi le squadre.</p>`;
+async function showNotices(id){
+  const c=await gestCtx(id); if(!c) return;
+  let posts=[]; try{ const {data}=await sb.from('league_posts').select('id,author_name,body,created_at').eq('league_id',id).eq('removed',false).order('created_at',{ascending:false}).limit(50); posts=data||[]; }catch(e){}
+  $app.innerHTML=`${gestBar('Comunicazioni')}
+    ${c.adm?`<div class="rcard" style="margin-top:12px"><h3>Nuovo avviso</h3><textarea id="nt" class="inp" maxlength="1000" rows="3" style="min-height:90px;padding:12px" placeholder="Scrivi un avviso per tutta la lega"></textarea><button class="btn wide" id="np" style="margin-top:10px">Pubblica</button></div>`:''}
+    <div class="sec-row"><h2>Avvisi</h2></div>
+    ${posts.map(p=>`<div class="rcard" style="margin-bottom:8px"><p style="margin:0 0 6px;white-space:pre-wrap">${escH(p.body)}</p><span class="dim" style="font-size:13px">${escH(p.author_name||'Admin')} \u00b7 ${new Date(p.created_at).toLocaleDateString('it-IT')}</span>${c.adm?` <button class="rules-toggle" data-rm="${p.id}" style="float:right">Rimuovi</button>`:''}</div>`).join('')||'<p class="dim">Nessun avviso.</p>'}`;
+  const g=x=>document.getElementById(x);
+  g('tb-back').onclick=showHome;
+  if(g('np')) g('np').onclick=async()=>{ const t=g('nt').value.trim(); if(!t){ toast('Scrivi qualcosa'); return; } try{ await rpc('post_notice',{p_league:id,p_body:t}); showNotices(id); }catch(e){ toast(errMsg(e)); } };
+  $app.querySelectorAll('[data-rm]').forEach(b=>b.onclick=async()=>{ try{ await rpc('remove_notice',{p_post:b.dataset.rm}); showNotices(id); }catch(e){ toast(errMsg(e)); } });
+}
+async function showCredits(id){
+  const c=await gestCtx(id); if(!c) return;
+  const t=await gestTeams(c);
+  $app.innerHTML=`${gestBar('Crediti')}${!t?needAuction():`<p class="dim" style="margin:10px 0">Crediti rimasti a ogni squadra (partenza: ${t.room.credits}). Modifica il numero e tocca Salva.</p>
+    ${t.seats.map(x=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${escH(x.team)}</b><span>${escH(x.name)}</span></div><input class="inp" type="number" inputmode="numeric" min="0" max="9999" data-cu="${x.user_id}" value="${x.credits}" style="width:84px;min-height:44px"><button class="btn" data-cs="${x.user_id}">Salva</button></div>`).join('')}`}`;
+  document.getElementById('tb-back').onclick=showHome;
+  $app.querySelectorAll('[data-cs]').forEach(b=>b.onclick=async()=>{ const v=+$app.querySelector(`[data-cu="${b.dataset.cs}"]`).value; try{ await rpc('set_credits',{p_league:id,p_user:b.dataset.cs,p_credits:v}); toast('Crediti aggiornati'); }catch(e){ toast(errMsg(e)); } });
+}
+async function showRosters(id){
+  const c=await gestCtx(id); if(!c) return;
+  const t=await gestTeams(c);
+  let pool=[]; if(t){ const {data}=await sb.from('pool').select('pid,name,role,rm,team,price,owner_seat').eq('room_id',t.room.id).not('owner_seat','is',null); pool=data||[]; }
+  const mant=t&&t.room.roles==='mantra', ro={P:0,D:1,C:2,A:3};
+  $app.innerHTML=`${gestBar('Gestione rose')}${!t?needAuction():t.seats.map(x=>`<div class="rcard" style="margin-top:10px"><h3>${escH(x.team)}</h3><p class="dim" style="margin:0 0 6px">${escH(x.name)} \u00b7 ${x.credits} crediti</p>
+      ${pool.filter(p=>p.owner_seat===x.seat).sort((a,b)=>ro[a.role]-ro[b.role]).map(p=>`<div class="rrow"><span>${p.role} \u00b7 ${escH(p.name)}${p.team?` <small class="dim">${escH(p.team)}</small>`:''}</span><span class="p">${p.price||0} <button class="rules-toggle" data-rl="${p.pid}" data-nm="${escH(p.name)}" data-pr="${p.price||0}">Svincola</button></span></div>`).join('')||'<p class="dim">Rosa vuota.</p>'}</div>`).join('')}`;
+  document.getElementById('tb-back').onclick=showHome;
+  $app.querySelectorAll('[data-rl]').forEach(b=>b.onclick=()=>{
+    openSheet(`<h2>Svincolare ${b.dataset.nm}?</h2><p class="dim" style="margin:6px 0 12px">Il calciatore torna libero e sparisce dalle formazioni della squadra.</p>
+      <button class="btn wide" id="sv1">Svincola e rimborsa ${b.dataset.pr} crediti</button><button class="btn wide ghost" id="sv0" style="margin-top:8px">Svincola senza rimborso</button><button class="btn wide ghost" data-close style="margin-top:8px">Annulla</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    const go=async(rf)=>{ try{ await rpc('release_player',{p_league:id,p_pid:+b.dataset.rl,p_refund:rf}); closeSheet(); toast('Calciatore svincolato'); showRosters(id); }catch(e){ toast(errMsg(e)); } };
+    document.getElementById('sv1').onclick=()=>go(true); document.getElementById('sv0').onclick=()=>go(false);
+  });
+}
+async function showLineups(id){
+  const c=await gestCtx(id); if(!c) return;
+  const t=await gestTeams(c);
+  const nolu=t&&NOLU(t.room.mode);
+  $app.innerHTML=`${gestBar('Gestione formazioni')}${!t?needAuction():nolu?'<p class="note" style="margin-top:14px">In questa asta scendono in campo tutti i calciatori della rosa: non servono formazioni.</p>':`<p class="dim" style="margin:10px 0">Scegli una squadra e inserisci o correggi la sua formazione.</p>
+    ${t.seats.map(x=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${escH(x.team)}</b><span>${escH(x.name)}</span></div><button class="btn" data-lu="${x.user_id}">Apri</button></div>`).join('')}`}`;
+  document.getElementById('tb-back').onclick=showHome;
+  $app.querySelectorAll('[data-lu]').forEach(b=>b.onclick=()=>showLineup(t.room.id,1,'gest',b.dataset.lu));
+}
 
 /* ---------- AMICI ---------- */
 async function showFriends(){
