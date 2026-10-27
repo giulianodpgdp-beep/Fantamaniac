@@ -210,10 +210,10 @@ button:focus-visible{outline:2px solid var(--chip);outline-offset:2px}
 .ibtn{width:44px;height:44px;display:grid;place-items:center}
 .ibtn svg{width:26px;height:26px}
 .lsel{width:100%;min-height:56px;border-radius:18px;background:#061c0f;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:19px;margin-top:6px}
-.stage{position:relative;margin:14px -16px 0;padding:18px 0 0;text-align:center;overflow:hidden;background:radial-gradient(130% 80% at 50% 100%,#2bb35c 0%,#12793b 48%,#0b4a25 100%);border-bottom:6px solid #0a3d20}
-.stage::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 46px,transparent 46px 92px)}
+.stage{position:relative;margin:14px -16px 0;padding:18px 0 0;text-align:center;overflow:visible;background:none;border-bottom:0}
+.stage::before{display:none}
 .stage>*{position:relative}
-.tname{font-size:30px;font-weight:600;line-height:1.1;padding:0 76px}
+.tname{text-shadow:0 2px 10px rgba(0,0,0,.75);font-size:30px;font-weight:600;line-height:1.1;padding:0 76px}
 .seg{display:grid;grid-template-columns:1fr 1fr;background:#061c0f;border-radius:999px;padding:4px;margin:4px 0 6px}
 .seg button{min-height:42px;border-radius:999px;font-weight:600;font-size:16px;color:var(--chalk-dim)}
 .seg button.on{background:var(--chip);color:#10230f}
