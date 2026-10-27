@@ -451,12 +451,12 @@ function openNameSheet(){
   inp.onkeydown=e=>{ if(e.key==='Enter') save(); };
 }
 function openMenu(){
-  const items=[['home','Home','home'],['aste','Le aste','gavel'],['how','Come funziona','gavel'],['rose','Le mie rose','league'],['rank','Classifica','cup'],['prof','Profilo','user']];
+  const items=[['home','Home','home'],['aste','Le aste','gavel'],['how','Come funziona','gavel'],['rose','Le mie rose','league'],['friends','Amici','user'],['rank','Classifica','cup'],['prof','Profilo','user']];
   openSheet(`<h2>Menu</h2><div class="menu">${items.map(([k,l,ic])=>`<button data-go="${k}">${IC[ic]}${l}</button>`).join('')}</div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">${logoSVG(52)}<div><div class="disp" style="font-size:24px;font-style:italic">Fanta<span style="color:var(--chip)">Maniac</span></div><div class="dim" style="font-size:13px">Versione di prova: calciatori inventati, ingresso gratis con crediti virtuali.</div></div></div>`);
   document.querySelectorAll('#sheet [data-go]').forEach(b=>b.onclick=()=>{ closeSheet(); goTo(b.dataset.go); });
 }
-function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste})[k](); }
+function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends})[k](); }
 
 /* ---------- ICONE ---------- */
 const IC = {
@@ -1715,6 +1715,46 @@ async function openWallet(){
   const b=document.getElementById('wrf'); if(b) b.onclick=async()=>{ try{ await rpc('claim_refill'); toast('Rifornimento ricevuto'); closeSheet(); await fetchWallet(); route_refresh(); }catch(e){ toast(errMsg(e)); } };
 }
 function route_refresh(){ if(document.querySelector('.dhead')) showHome(); }
+
+/* ---------- AMICI ---------- */
+async function showFriends(){
+  stopTick(); stopLobby(); G=null; setNav(true,'home');
+  let code='', list=[];
+  try{ [code,list]=await Promise.all([rpc('my_friend_code'),rpc('list_friends')]); }catch(e){ toast(errMsg(e)); }
+  const inc=list.filter(f=>f.status==='pending'&&f.incoming), out=list.filter(f=>f.status==='pending'&&!f.incoming), ok=list.filter(f=>f.status==='accepted');
+  const row=f=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${f.name}</b><span>${f.status==='accepted'?(f.played?`${f.played} sfide · ${f.wins} vinte · ${f.losses} perse`:'Nessuna sfida ancora'):f.incoming?'Ti ha chiesto l’amicizia':'Richiesta inviata'}</span></div>
+    ${f.status==='accepted'?`<button class="btn" data-fo="${f.id}">Apri</button>`:f.incoming?`<button class="btn" data-fa="${f.id}">Accetta</button>`:''}</div>${f.invite?`<div class="strip" style="margin-top:4px"><div class="t"><b>${f.name} ti sfida</b><span>Sfida amichevole, senza €</span></div><button class="btn" data-fi="${f.invite}">Accetta</button></div>`:''}`;
+  $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">Amici</h1><span style="width:34px"></span></div>
+    <div class="rcard" style="margin-top:12px"><h3>Il tuo codice amico</h3><div class="walbig" style="letter-spacing:4px">${code}</div>
+      <button class="btn wide ghost" id="fc-share">Condividi il codice</button></div>
+    <div class="rcard" style="margin-top:12px"><h3>Aggiungi un amico</h3><div style="display:flex;gap:8px"><input id="fc-in" class="inp" maxlength="6" placeholder="Codice amico" style="flex:1;text-transform:uppercase"><button class="btn" id="fc-add">Aggiungi</button></div></div>
+    ${inc.length?`<div class="sec-row"><h2>Richieste</h2></div>${inc.map(row).join('')}`:''}
+    <div class="sec-row"><h2>I miei amici</h2></div>${ok.map(row).join('')||'<p class="dim">Ancora nessun amico: scambiatevi i codici.</p>'}
+    ${out.length?`<div class="sec-row"><h2>In attesa</h2></div>${out.map(row).join('')}`:''}`;
+  const g=x=>document.getElementById(x);
+  g('tb-back').onclick=showHome;
+  g('fc-share').onclick=async()=>{ const t=`Sfidami su FantaManiac! Il mio codice amico è ${code}`; try{ if(navigator.share) await navigator.share({text:t}); else { await navigator.clipboard.writeText(t); toast('Copiato'); } }catch(e){} };
+  g('fc-add').onclick=async()=>{ try{ await rpc('friend_request',{p_code:g('fc-in').value}); toast('Fatto'); showFriends(); }catch(e){ toast(errMsg(e)); } };
+  $app.querySelectorAll('[data-fa]').forEach(b=>b.onclick=async()=>{ try{ await rpc('friend_answer',{p_other:b.dataset.fa,p_accept:true}); showFriends(); }catch(e){ toast(errMsg(e)); } });
+  $app.querySelectorAll('[data-fi]').forEach(b=>b.onclick=async()=>{ try{ const rid=await rpc('accept_challenge',{p_match:b.dataset.fi,p_accept:true}); await enterRoom(rid); }catch(e){ toast(errMsg(e)); } });
+  $app.querySelectorAll('[data-fo]').forEach(b=>b.onclick=()=>showFriend(list.find(f=>f.id===b.dataset.fo)));
+}
+async function showFriend(f){
+  let h=[]; try{ h=await rpc('friend_history',{p_other:f.id}); }catch(e){ toast(errMsg(e)); }
+  const res=m=>m.status==='done'?(m.winner===ME?'Vinta':m.winner?'Persa':'Pari')+` · ${m.mine??'—'} – ${m.theirs??'—'}`:({invited:'Sfida inviata',accepted:'In corso',declined:'Rifiutata'})[m.status];
+  $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">${f.name}</h1><span style="width:34px"></span></div>
+    <div class="kpis" style="margin-top:12px"><div><b>${f.played}</b><span>Sfide</span></div><div><b>${f.wins}</b><span>Vinte</span></div><div><b>${f.losses}</b><span>Perse</span></div></div>
+    <p class="note">Le sfide tra amici sono gratis: niente buy-in e nessun premio in €.</p>
+    <div class="sec-row"><h2>Sfida ${f.name}</h2></div>
+    <div style="display:flex;gap:8px"><button class="btn" data-ch="turbo">Asta Turbo</button><button class="btn" data-ch="super">Asta Minifoot</button><button class="btn" data-ch="scorpione">Asta Scorpion</button></div>
+    <div class="sec-row"><h2>Storico</h2></div>
+    ${h.map(m=>`<div class="rrow"><span>${new Date(m.created).toLocaleDateString('it-IT')}${m.md?` · G${m.md}`:''}</span><span class="p">${res(m)}</span></div>`).join('')||'<p class="dim">Nessuna sfida ancora.</p>'}
+    <button class="btn wide ghost" id="fr-rm" style="margin-top:16px">Rimuovi dagli amici</button>`;
+  const g=x=>document.getElementById(x);
+  g('tb-back').onclick=showFriends;
+  $app.querySelectorAll('[data-ch]').forEach(b=>b.onclick=async()=>{ if(!(await ensureName())) return; try{ const rid=await rpc('challenge_friend',{p_other:f.id,p_mode:b.dataset.ch}); toast('Sfida inviata'); await enterRoom(rid); }catch(e){ toast(errMsg(e)); } });
+  g('fr-rm').onclick=async()=>{ try{ await rpc('friend_remove',{p_other:f.id}); showFriends(); }catch(e){ toast(errMsg(e)); } };
+}
 function accountCardHTML(){
   return AUTH.anon
     ? `<div class="rcard" style="margin-bottom:12px"><h3>Salva il tuo account</h3><p class="dim" style="margin:0 0 10px">Ora giochi come ospite: se cambi telefono o cancelli i dati perdi leghe e € virtuali. Con l’email li ritrovi ovunque.</p>
