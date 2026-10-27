@@ -393,6 +393,13 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .ptabs button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:140px;padding:6px 14px;border-radius:22px;font-weight:600;font-size:14px}
 .ptabs button.on{background:#0a3a9a}
 .ptabs button span{font-size:20px}
+.rcard{background:#020b17;border-radius:22px;padding:14px 16px;margin-bottom:10px}
+.rcard h3{font-size:20px;font-weight:600;margin:0 0 10px;color:#cfe0ff}
+.rrw{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0}
+.rrw.bm{padding:5px 0}.bmi{width:92px;min-height:40px;text-align:right}
+.swt{width:58px;height:32px;border-radius:999px;background:#1a3a55;border:2px solid #8a94a8;position:relative;flex:none}
+.swt i{position:absolute;top:3px;left:4px;width:22px;height:22px;border-radius:50%;background:#8a94a8;transition:.15s}
+.swt.on{background:#1f7a3c;border-color:#a8e6b8}.swt.on i{left:30px;background:#fff}
 </style>
 </head>
 <body>
@@ -626,6 +633,63 @@ function openTeamEditor(l,m,done){
   };
   draw();
 }
+
+const BM_DEF={gol:3,assist:1,amm:-0.5,esp:-1,rigpar:3,rigsb:-3,aut:-2,golsub:-1,imb:1};
+const BM_LAB={gol:'Gol segnato',assist:'Assist',amm:'Ammonizione',esp:'Espulsione',rigpar:'Rigore parato',rigsb:'Rigore sbagliato',aut:'Autogol',golsub:'Gol subito (portiere)',imb:'Imbattibilità (portiere)'};
+function leagueSet(l){
+  const st=l.settings||{}, mods=l.roles==='mantra'?Object.keys(MANTRA_GRID):CLASSIC_MODS;
+  return {modules:(st.modules&&st.modules.length?st.modules:mods.slice()), bench:st.bench||12, lock_min:st.lock_min==null?5:st.lock_min,
+    hide_lineups:st.hide_lineups==null?true:!!st.hide_lineups, subs:st.subs==null?5:st.subs, no_lineup:st.no_lineup||'prev',
+    bonus:Object.assign({},BM_DEF,st.bonus||{}), gol_first:st.gol_first||66, gol_step:st.gol_step||6};
+}
+async function showRules(id){
+  stopTick(); stopLobby(); G=null; setNav(false);
+  await fetchLeagues();
+  const cur=LEAGUES.find(x=>x.lg.id===id); if(!cur) return showHome();
+  const l=cur.lg, adm=l.owner===ME||!!cur.me.is_admin, mods=l.roles==='mantra'?Object.keys(MANTRA_GRID):CLASSIC_MODS;
+  const S=leagueSet(l); let dirty=false;
+  const dis=adm?'':'disabled';
+  const sw=(k,on)=>`<button class="swt ${on?'on':''}" data-sw="${k}" ${dis} role="switch" aria-checked="${on}"><i></i></button>`;
+  const stp=(k,v,lo,hi)=>`<div class="stp"><button data-dec="${k}" ${dis} aria-label="Meno">−</button><input class="inp stpi" type="number" inputmode="numeric" data-in="${k}" value="${v}" min="${lo}" max="${hi}" ${dis}><button data-inc="${k}" ${dis} aria-label="Più">+</button></div>`;
+  const draw=()=>{
+    $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">Regolamento e opzioni</h1><span style="width:34px"></span></div>
+    <p class="dim" style="margin-bottom:10px">${l.name} · ${l.roles==='mantra'?'Mantra':'Classic'}${adm?'':' · solo lettura: le modifiche le fa un admin'}</p>
+    <div class="rcard"><h3>Moduli consentiti</h3><div class="frow" style="flex-wrap:wrap">${mods.map(m=>`<button class="chip ${S.modules.includes(m)?'on':''}" data-mod="${m}" ${dis}>${m}</button>`).join('')}</div></div>
+    <div class="rcard"><h3>Panchina</h3><div class="rrw"><span class="dim">Calciatori in distinta</span>${stp('bench',S.bench,7,12)}</div></div>
+    <div class="rcard"><h3>Chiusura formazioni</h3><p class="dim" style="margin:0 0 8px">Minuti prima della prima partita della giornata.</p><div class="frow" style="flex-wrap:wrap">${[5,15,30,60].map(m=>`<button class="chip ${S.lock_min===m?'on':''}" data-lock="${m}" ${dis}>${m} min</button>`).join('')}</div></div>
+    <div class="rcard"><div class="rrw"><h3 style="margin:0">Formazioni nascoste</h3>${sw('hide_lineups',S.hide_lineups)}</div><p class="dim" style="margin:6px 0 0">Gli altri vedono la tua formazione solo dopo la chiusura.</p></div>
+    <div class="rcard"><h3>Sostituzioni</h3><div class="rrw"><span class="dim">Numero di cambi (0–5)</span>${stp('subs',S.subs,0,5)}</div></div>
+    <div class="rcard"><h3>Formazione non schierata</h3><div class="frow" style="flex-wrap:wrap"><button class="chip ${S.no_lineup==='prev'?'on':''}" data-nl="prev" ${dis}>Recupera la precedente</button><button class="chip ${S.no_lineup==='zero'?'on':''}" data-nl="zero" ${dis}>Zero punti</button></div></div>
+    <div class="rcard"><h3>Bonus e malus</h3>${Object.keys(BM_DEF).map(k=>`<div class="rrw bm"><span>${BM_LAB[k]}</span><input class="inp bmi" type="number" step="0.5" inputmode="decimal" data-bm="${k}" value="${S.bonus[k]}" ${dis}></div>`).join('')}
+      ${adm?'<button class="btn ghost" id="bm-reset" style="margin-top:10px">Ripristina i valori standard</button>':''}</div>
+    <div class="rcard"><h3>Soglie gol</h3><div class="rrw"><span class="dim">Punti per il 1º gol</span>${stp('gol_first',S.gol_first,40,100)}</div>
+      <div class="rrw"><span class="dim">Poi un gol ogni</span>${stp('gol_step',S.gol_step,1,15)}</div></div>
+    <p class="note">Crediti, rosa e tipo di asta si scelgono quando crei l’asta. Bonus, malus, sostituzioni e soglie contano quando collegheremo i voti.</p>
+    ${adm?`<div style="height:70px"></div><button class="btn wide" id="rl-save" style="position:fixed;left:16px;right:16px;bottom:16px;max-width:448px;margin:0 auto" ${dirty?'':'disabled'}>Salva</button>`:''}`;
+    const g=x=>document.getElementById(x);
+    g('tb-back').onclick=()=>{ if(dirty&&!confirm('Uscire senza salvare le modifiche?')) return; showLeagueProfile(l.id); };
+    if(!adm) return;
+    const touch=()=>{ dirty=true; g('rl-save').disabled=false; };
+    $app.querySelectorAll('[data-mod]').forEach(b=>b.onclick=()=>{ const m=b.dataset.mod, i=S.modules.indexOf(m);
+      if(i>=0){ if(S.modules.length===1){ toast('Serve almeno un modulo'); return; } S.modules.splice(i,1); } else S.modules.push(m); S.modules.sort((a,b)=>mods.indexOf(a)-mods.indexOf(b)); dirty=true; draw(); });
+    $app.querySelectorAll('[data-lock]').forEach(b=>b.onclick=()=>{ S.lock_min=+b.dataset.lock; dirty=true; draw(); });
+    $app.querySelectorAll('[data-nl]').forEach(b=>b.onclick=()=>{ S.no_lineup=b.dataset.nl; dirty=true; draw(); });
+    $app.querySelectorAll('[data-sw]').forEach(b=>b.onclick=()=>{ S[b.dataset.sw]=!S[b.dataset.sw]; dirty=true; draw(); });
+    const lim={bench:[7,12],subs:[0,5],gol_first:[40,100],gol_step:[1,15]};
+    const setN=(k,v)=>{ S[k]=Math.max(lim[k][0],Math.min(lim[k][1],Math.round(+v)||lim[k][0])); };
+    $app.querySelectorAll('[data-dec]').forEach(b=>b.onclick=()=>{ setN(b.dataset.dec,S[b.dataset.dec]-1); dirty=true; draw(); });
+    $app.querySelectorAll('[data-inc]').forEach(b=>b.onclick=()=>{ setN(b.dataset.inc,S[b.dataset.inc]+1); dirty=true; draw(); });
+    $app.querySelectorAll('[data-in]').forEach(i=>i.onchange=()=>{ setN(i.dataset.in,i.value); dirty=true; draw(); });
+    $app.querySelectorAll('[data-bm]').forEach(i=>i.onchange=()=>{ const v=Math.max(-20,Math.min(20,Math.round((+i.value||0)*2)/2)); S.bonus[i.dataset.bm]=v; i.value=v; touch(); });
+    if(g('bm-reset')) g('bm-reset').onclick=()=>{ S.bonus=Object.assign({},BM_DEF); dirty=true; draw(); };
+    g('rl-save').onclick=async()=>{
+      g('rl-save').disabled=true;
+      try{ await rpc('update_league_settings',{p_league:l.id,p_settings:S}); toast('Regolamento salvato'); showLeagueProfile(l.id); }
+      catch(e){ toast(errMsg(e)); g('rl-save').disabled=false; }
+    };
+  };
+  draw();
+}
 async function showParticipants(id){
   stopTick(); stopLobby(); G=null; setNav(false);
   await fetchLeagues();
@@ -712,6 +776,7 @@ async function showLeagueProfile(id){
     </div>
     <p class="dim" style="text-align:center;margin:12px 0">${l.roles==='mantra'?'Mantra':'Classic'} \u00b7 codice lega <b>${l.code}</b></p>
     <button class="btn wide" id="lp-part">Partecipanti</button>
+    <button class="btn wide ghost" id="lp-rules" style="margin-top:8px">Regolamento e opzioni</button>
     <button class="btn wide ghost" id="lp-inv" style="margin-top:8px">Invita gli amici</button>
     ${own?`<hr class="lpsep" style="margin:18px 0"><button class="btn wide ghost" id="lp-reset" style="margin-top:8px">Reset Lega</button>
     <button class="btn wide ghost" id="lp-del" style="margin-top:8px;color:#ff9aa2">Elimina Lega</button>`:`<p class="note">${mine?'Solo il superadmin pu\u00f2 resettare o eliminare la lega.':'Solo gli admin possono modificare la lega.'}</p>`}`;
@@ -719,6 +784,7 @@ async function showLeagueProfile(id){
   g('tb-back').onclick=showHome;
   g('lp-inv').onclick=()=>leagueInvite(l);
   g('lp-part').onclick=()=>showParticipants(l.id);
+  g('lp-rules').onclick=()=>showRules(l.id);
   const save=async(patch)=>{
     const n={name:l.name,founded:l.founded||yr,emblem:ea+':'+eb,...patch};
     try{ await rpc('update_league_profile',{p_league:l.id,p_name:n.name,p_founded:n.founded,p_emblem:n.emblem}); closeSheet(); showLeagueProfile(l.id); }
@@ -1505,7 +1571,8 @@ const MANTRA_GRID = {
 };
 let LU = null;
 const luMant = ()=>LU.room.roles==='mantra';
-const luMods = ()=>luMant()?Object.keys(MANTRA_GRID):CLASSIC_MODS;
+const luMods = ()=>{ const all=luMant()?Object.keys(MANTRA_GRID):CLASSIC_MODS, m=LU&&LU.set&&LU.set.modules; return m&&m.length?all.filter(x=>m.includes(x)):all; };
+const luBench = ()=>(LU&&LU.set&&LU.set.bench)||12;
 const luBy = pid=>LU.mine.find(p=>p.pid===pid);
 const rmOf = p=>(p.rm||'').split(';').filter(Boolean);
 function luSpec(m){
@@ -1552,8 +1619,9 @@ async function showLineup(roomId, md, from){
     const {data:mine}=await sb.from('pool').select('*').eq('room_id',roomId).eq('owner_seat',seat.seat);
     md=md||1;
     const {data:ex}=await sb.from('lineups').select('*').eq('room_id',roomId).eq('seat',seat.seat).eq('md',md).maybeSingle();
-    LU={from:from||(LU&&LU.from)||'hist',room,seat:seat.seat,mine:mine||[],md,module:'4-4-2',slots:Array(11).fill(null),bench:[],saved:!!ex};
-    const mods=luMods(), first=(luFeasible('4-4-2')?'4-4-2':mods.find(luFeasible))||'4-4-2';
+    let st={}; if(room.league_id){ try{ const {data:lg}=await sb.from('leagues').select('settings').eq('id',room.league_id).maybeSingle(); st=(lg&&lg.settings)||{}; }catch(e){} }
+    LU={from:from||(LU&&LU.from)||'hist',room,seat:seat.seat,mine:mine||[],md,module:'4-4-2',slots:Array(11).fill(null),bench:[],saved:!!ex,set:st};
+    const mods=luMods(), first=(mods.includes('4-4-2')&&luFeasible('4-4-2')?'4-4-2':mods.find(luFeasible))||mods[0]||'4-4-2';
     if(ex && mods.includes(ex.module) && ex.starters.length===11){
       LU.module=ex.module; LU.slots=ex.starters.map(x=>luBy(x)?x:null); LU.bench=ex.bench||[]; luRebench();
     } else { LU.module=first; LU.slots=Array(11).fill(null); luRebench(); }
@@ -1566,7 +1634,7 @@ function renderLineup(){
     return `<button class="pslot ${p?'':'empty'}" data-si="${i}"><span class="kit ${p?p.role:'X'}">${SHIRT}<em>${p?(mant&&p.rm?p.rm.split(';')[0]:p.role):'+'}</em></span><span class="pn">${p?p.name.split(' ').slice(-1)[0]:(spec[i].label.length>3?spec[i].label.split('/')[0]:spec[i].label)}</span>${spec[i].label.length>1&&mant?`<small class="pl">${spec[i].label}</small>`:''}</button>`; };
   let idx=0; const rows=lines.map(sz=>{ const items=[]; for(let k=0;k<sz;k++) items.push(slot(idx++)); return `<div class="pline">${items.join('')}</div>`; });
   const pitch=rows.reverse().join('');
-  const bn=L_.bench, cut=mant?12:bn.length;
+  const bn=L_.bench, cut=luBench();
   const benchRow=(pid,i)=>{ const p=luBy(pid); return `<div class="rrow bn ${i>=cut?'out':''}"><span class="bnn">${i+1}</span>${rb(p,mant)}${p.name}${p.team?` <small class="tm">${p.team}</small>`:''}<span class="mv"><button data-up="${i}" ${i?'':'disabled'} aria-label="Su">▲</button><button data-dn="${i}" ${i<bn.length-1?'':'disabled'} aria-label="Giù">▼</button></span></div>`; };
   $app.innerHTML = `
     <div class="tb"><button class="back" id="lu-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t">Formazione</h1><span style="width:48px"></span></div>
@@ -1576,7 +1644,7 @@ function renderLineup(){
     <div class="pitch"><div class="mk"><i class="half"></i><i class="cc"></i><i class="box"></i><i class="six"></i><i class="arc"></i><i class="box t"></i><i class="six t"></i></div><div class="plines">${pitch}</div></div>
     <p class="dim" style="margin:8px 0 12px">${n}/11 titolari. Tocca un posto per scegliere il calciatore.${mant?' Le sigle sotto ai posti sono i ruoli ammessi.':''}</p>
     <h2 class="sec" style="font-size:22px">Panchina</h2>
-    <p class="dim" style="margin:0 0 6px;font-size:13px">${mant?'Entrano nell’ordine in cui li metti. Valgono i primi 12, con almeno un portiere; gli altri restano fuori distinta.':'Entrano nell’ordine in cui li metti. Usa le frecce per cambiare l’ordine.'}</p>
+    <p class="dim" style="margin:0 0 6px;font-size:13px">Entrano nell’ordine in cui li metti. Valgono i primi ${cut}${mant?', con almeno un portiere':''}; gli altri restano fuori distinta. Usa le frecce per cambiare l’ordine.</p>
     ${bn.map(benchRow).join('')||'<p class="dim">Nessun calciatore in panchina.</p>'}
     <button class="btn wide" id="lu-save" style="margin-top:16px">${L_.saved?'Aggiorna la formazione':'Salva la formazione'}</button>
     <p class="note">I punteggi arrivano quando colleghiamo i voti della Serie A. Intanto la formazione resta salvata.${mant?' La griglia dei ruoli per ogni modulo è ricostruita dalle regole di fantacalcio.it: se un posto ti sembra sbagliato, dimmelo.':''}</p>`;
@@ -1591,7 +1659,7 @@ function renderLineup(){
   document.getElementById('lu-save').onclick=async()=>{
     const miss=11-luStarters().length;
     if(miss>0){ toast(`Mancano ${miss} titolari`); return; }
-    if(mant && !L_.bench.slice(0,12).some(pid=>luBy(pid).role==='P')){ toast('In panchina serve almeno un portiere tra i primi 12'); return; }
+    if(mant && !L_.bench.slice(0,cut).some(pid=>luBy(pid).role==='P')){ toast('In panchina serve almeno un portiere tra i primi '+cut); return; }
     const bt=document.getElementById('lu-save'); bt.disabled=true;
     try{
       await rpc('save_lineup',{p_room:r_.id,p_md:L_.md,p_module:L_.module,p_starters:L_.slots,p_bench:L_.bench});
