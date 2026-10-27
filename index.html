@@ -26,6 +26,10 @@ html{scroll-padding-top:env(safe-area-inset-top,0px)}
 *,*::before,*::after{box-sizing:inherit}
 html{zoom:.86}
 body{margin:0;background-color:#06180c;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85 0.05' numOctaves='3' seed='7'/><feColorMatrix values='0 0 0 0 0.10  0 0 0 0 0.42  0 0 0 0 0.15  0 0 0 0.65 -0.18'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"),repeating-linear-gradient(180deg,#061a0d 0 90px,#0a2a14 90px 180px);background-attachment:fixed;color:var(--chalk);font-family:'Barlow',system-ui,-apple-system,'Segoe UI',sans-serif;font-size:16px;line-height:1.4;-webkit-tap-highlight-color:transparent}
+.grass-on{background:#06180c!important}
+#grass{position:fixed;left:0;top:0;width:100%;height:100%;z-index:0;pointer-events:none;display:none}
+body.grass-on #grass{display:block}
+.app{position:relative;z-index:1}
 .app{max-width:480px;margin:0 auto;min-height:calc(100vh/.86);padding:0 16px 110px}
 h1,h2,h3,.disp{font-family:'Barlow Condensed','Arial Narrow',Impact,sans-serif;font-weight:700;letter-spacing:.01em;margin:0}
 h1{font-size:40px;line-height:1}
@@ -415,6 +419,7 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 </style>
 </head>
 <body>
+<canvas id="grass" aria-hidden="true"></canvas>
 <div class="app" id="app"></div>
 <nav id="nav" hidden><div class="in"></div></nav>
 <div id="toast" role="status"></div>
@@ -2169,6 +2174,45 @@ function showProfile(){
   };
   const c=document.getElementById('clr'); if(c) c.onclick=()=>{ STORE.history=[]; saveStore(); toast('Storico cancellato'); showProfile(); };
 }
+
+/* ---------- ERBA CHE SI MUOVE AL VENTO (solo Home) ---------- */
+(function(){
+  const cv=document.getElementById('grass'); if(!cv) return;
+  const cx=cv.getContext('2d'); let W=0,H=0,blades=[],raf=0,last=0,on=false;
+  const COL=['#0c3d18','#10481d','#15561f','#0a3114','#1a6325'];
+  const reduce=window.matchMedia&&matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function build(){
+    W=360; H=Math.ceil(360*(innerHeight/Math.max(innerWidth,1))); cv.width=W; cv.height=H; blades=[];
+    for(let y=4;y<H+24;y+=7) for(let x=-4;x<W+4;x+=6){
+      blades.push({x:x+Math.random()*5,y:y+Math.random()*5,l:13+Math.random()*12,p:Math.random()*6.28,c:Math.floor(Math.random()*COL.length)});
+    }
+  }
+  function frame(t){
+    raf=requestAnimationFrame(frame);
+    if(t-last<33) return; last=t;
+    const s=t/1000;
+    cx.fillStyle='#06180c'; cx.fillRect(0,0,W,H);
+    for(let y=0;y<H;y+=80){ cx.fillStyle=(y/80)%2?'rgba(40,120,50,.07)':'rgba(0,0,0,.10)'; cx.fillRect(0,y,W,80); }
+    cx.lineWidth=1.7; cx.lineCap='round';
+    for(let c=0;c<COL.length;c++){
+      cx.strokeStyle=COL[c]; cx.beginPath();
+      for(let i=0;i<blades.length;i++){
+        const b=blades[i]; if(b.c!==c) continue;
+        const gust=Math.sin(s*0.9-b.x*0.014-b.y*0.004)*0.5+0.5;
+        const sw=(Math.sin(s*2.1+b.p)*0.25+gust*1.1)*b.l*0.42;
+        cx.moveTo(b.x,b.y); cx.quadraticCurveTo(b.x+sw*0.35,b.y-b.l*0.6,b.x+sw,b.y-b.l);
+      }
+      cx.stroke();
+    }
+  }
+  function want(){ return !!document.querySelector('.seg') && !document.querySelector('.sgtheme') && !document.hidden; }
+  function check(){
+    const w=want();
+    if(w&&!on){ on=true; document.body.classList.add('grass-on'); build(); if(reduce){ frame(0); cancelAnimationFrame(raf); } else raf=requestAnimationFrame(frame); }
+    else if(!w&&on){ on=false; document.body.classList.remove('grass-on'); cancelAnimationFrame(raf); }
+  }
+  setInterval(check,400); addEventListener('resize',()=>{ if(on) build(); });
+})();
 
 boot();
 </script>
