@@ -66,7 +66,7 @@ button:focus-visible{outline:2px solid var(--chip);outline-offset:2px}
 .chip{min-height:36px;padding:0 14px;border-radius:999px;border:1.5px solid var(--line);font-size:14px;font-weight:600}
 .chip.on{background:var(--chalk);color:var(--felt-3);border-color:var(--chalk)}
 .ttable{border:1.5px solid var(--line);border-radius:18px;overflow:hidden;background:#0c2f1a}
-.trow{display:grid;grid-template-columns:1fr 64px 48px;align-items:center;gap:6px;width:100%;text-align:left;padding:0 12px;min-height:54px;border-top:1px solid var(--line)}
+.trow{display:grid;grid-template-columns:1fr 58px 62px;align-items:center;gap:6px;width:100%;text-align:left;padding:0 12px;min-height:54px;border-top:1px solid var(--line)}
 .trow.h{min-height:42px;background:#082414;border-top:0;font-size:12px;color:var(--chalk-dim);font-weight:600}
 .trow.h button{text-align:inherit;font-size:12px;font-weight:600;color:var(--chalk-dim);min-height:42px}
 .trow.h button.on{color:var(--chip)}
@@ -981,13 +981,15 @@ const errMsg = e=>((e&&e.message)||'').trim()||'Errore di rete, riprova';
 async function rpc(fn,args){ const {data,error}=await sb.rpc(fn,args||{}); if(error) throw error; return data; }
 
 let ROOMS = [], TABLES = [], MYROOM = null;
+let TPL_OK=false;
 async function fetchOpenRooms(){
   if(!sb) return;
   try{
-    const {data}=await sb.from('rooms').select('*').eq('status','open').order('created_at',{ascending:false}).limit(200);
+    if(!TPL_OK){ TPL_OK=true; try{ await sb.rpc('ensure_templates'); }catch(e){ TPL_OK=false; } }
+    const {data}=await sb.from('rooms').select('*').eq('status','open').order('created_at',{ascending:false}).limit(500);
     ROOMS=data||[];
     const fresh=Date.now()-3*3600*1000;
-    TABLES=ROOMS.filter(r=>!r.is_private && new Date(r.created_at).getTime()>fresh).map(r=>({...r, seats:r.max_seats, name:'Tavolo '+r.code}));
+    TABLES=ROOMS.filter(r=>!r.is_private && (r.is_template || new Date(r.created_at).getTime()>fresh)).map(r=>({...r, seats:r.max_seats, name:'Tavolo '+r.code}));
     const {data:ms}=await sb.from('seats').select('room_id').eq('user_id',ME);
     const ids=(ms||[]).map(x=>x.room_id);
     if(ids.length){
@@ -1035,7 +1037,9 @@ async function createTable(f){
 }
 
 /* ---------- LOBBY: TAVOLI PUBBLICI ---------- */
-const L = {sort:'free', dir:1, call:'all', hideFull:true, sel:null};
+const L = {sort:'free', dir:1, call:'all', hideFull:true, sel:null, buyin:'all', seats:'all'};
+const BUYINS=[0,10,20,50,100,200,500,1000,2000];
+const eurS=c=>c?eur(c).replace(/,00$/,'').replace('€ ','€'):'Gratis';
 let curMode = 'classic', lobbyT = null, lobbyChan = null, lobbyDeb = null;
 function stopLobby(){
   clearInterval(lobbyT); lobbyT=null; clearTimeout(lobbyDeb);
@@ -1053,8 +1057,9 @@ function tableRules(t){
     t.call==='draft'?'Il valore di ogni calciatore è quello di listino, riproporzionato ai crediti del tavolo':'Devi sempre tenere 1 credito per ogni posto ancora vuoto',
     'L’asta parte da sola quando tutti i posti sono occupati'
   ];
-  if(t.mode==='turbo') r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato: poi la rosa si azzera`);
-  if(NOLU(t.mode)) r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato, ${total} calciatori: poi la rosa si azzera`);
+  if(t.buyin_cents) r.push(t.max_seats===2?`Buy-in ${eur(t.buyin_cents)} a testa: sfida diretta, nessuna commissione, il vincitore prende tutto`:`Buy-in ${eur(t.buyin_cents)} a testa, commissione 10%: il montepremi va ai primi classificati`);
+  if(t.md_target) r.push(`Vale per la giornata ${t.md_target} di Serie A (se parte prima, passa alla successiva)`);
+  else if(t.mode==='turbo'||NOLU(t.mode)) r.push(`Vale per ${t.days} ${t.days===1?'giornata':'giornate'} di campionato: poi la rosa si azzera`);
   return r;
 }
 function topBarHTML(title){
@@ -1076,9 +1081,9 @@ function openMode(id){
   const m=MODES.find(x=>x.id===id); if(m) showLobby(m.key);
 }
 
-const curTables = ()=>TABLES.filter(t=>t.mode===curMode&&(L.call==='all'||t.call===L.call));
+const curTables = ()=>TABLES.filter(t=>t.mode===curMode&&(L.call==='all'||t.call===L.call)&&(L.buyin==='all'||(t.buyin_cents||0)===L.buyin)&&(L.seats==='all'||t.max_seats===L.seats));
 async function showLobby(mode){
-  if(typeof mode==='string'){ if(curMode!==mode){ L.call='all'; L.sel=null; } curMode=mode; }
+  if(typeof mode==='string'){ if(curMode!==mode){ L.call='all'; L.sel=null; L.buyin='all'; L.seats='all'; } curMode=mode; }
   stopTick(); stopLobby(); setNav(false);
   const modeId=idOfKey(curMode), m=MODES.find(x=>x.id===modeId);
   $app.innerHTML = `
@@ -1088,17 +1093,28 @@ async function showLobby(mode){
     <button class="btn wide ghost" id="quick" style="margin-bottom:12px">Siediti a un tavolo aperto</button>
     <div class="filters">
       <div class="frow"><span class="lbl">Tipo</span><button class="chip ${L.call==='all'?'on':''}" data-fc="all">Tutti</button><button class="chip ${L.call==='random'?'on':''}" data-fc="random">Random</button><button class="chip ${L.call==='chiamata'?'on':''}" data-fc="chiamata">A chiamata</button><button class="chip ${L.call==='draft'?'on':''}" data-fc="draft">Draft</button></div>
+      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Buy-in</span><button class="chip ${L.buyin==='all'?'on':''}" data-fb="all">Tutti</button>${BUYINS.map(b=>`<button class="chip ${L.buyin===b?'on':''}" data-fb="${b}">${eurS(b)}</button>`).join('')}</div>
+      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Posti</span><button class="chip ${L.seats==='all'?'on':''}" data-fs="all">Tutti</button>${(RULES[curMode].opts||[2,4,6,8,10,12,14,16,18,20]).map(n=>`<button class="chip ${L.seats===n?'on':''}" data-fs="${n}">${n}</button>`).join('')}</div>
       <div class="frow"><span class="lbl">Mostra</span><button class="chip ${L.hideFull?'on':''}" data-hide>Solo tavoli con posti liberi</button></div>
     </div>
     <div class="ttable" id="ttable"><div class="empty-l">Carico i tavoli…</div></div>
     <p class="note">Ingresso gratis con crediti virtuali. Qui vedi i tavoli pubblici. Un tavolo privato non compare: ci entri solo con il codice.</p>`;
   bindTop(showAste, ()=>openInfo(modeId));
   $app.querySelectorAll('[data-fc]').forEach(b=>b.onclick=()=>{L.call=b.dataset.fc;showLobby()});
+  $app.querySelectorAll('[data-fb]').forEach(b=>b.onclick=()=>{L.buyin=b.dataset.fb==='all'?'all':+b.dataset.fb;showLobby()});
+  $app.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{L.seats=b.dataset.fs==='all'?'all':+b.dataset.fs;showLobby()});
   $app.querySelector('[data-hide]').onclick=(e)=>{L.hideFull=!L.hideFull;e.currentTarget.classList.toggle('on',L.hideFull);renderRows()};
   document.getElementById('quick').onclick=async()=>{
     await fetchOpenRooms();
-    const c=curTables().filter(t=>t.filled<t.max_seats).sort((a,b)=>(b.filled/b.max_seats)-(a.filled/a.max_seats));
-    if(c.length) joinTable(c[0]); else toast('Nessun tavolo aperto: creane uno');
+    await fetchWallet();
+    const bal=WALLET.cents==null?0:WALLET.cents;
+    const c=curTables().filter(t=>t.filled<t.max_seats&&(t.buyin_cents||0)<=bal).sort((a,b)=>(b.filled/b.max_seats)-(a.filled/a.max_seats)||(b.buyin_cents||0)-(a.buyin_cents||0));
+    if(!c.length){ toast('Nessun tavolo adatto al tuo saldo'); return; }
+    const t=c[0];
+    if(!t.buyin_cents) return joinTable(t);
+    openSheet(`<h2>Siediti subito</h2><p class="dim" style="margin:6px 0 12px">${modeName(t.mode)} \u00b7 ${CALL_LABEL[t.call]} \u00b7 ${t.filled}/${t.max_seats} posti. Buy-in ${eur(t.buyin_cents)}, saldo ${eur(bal)}.</p><button class="btn wide" id="qs-ok">Siediti</button><button class="btn wide ghost" data-close style="margin-top:8px">Annulla</button>`);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    document.getElementById('qs-ok').onclick=()=>{ closeSheet(); joinTable(t); };
   };
   document.getElementById('mktable').onclick=()=>openCreate(curMode);
   await fetchOpenRooms(); renderRows();
@@ -1189,7 +1205,7 @@ function sortKey(t){
   switch(L.sort){
     case 'name': return t.code;
     case 'seats': return t.filled;
-    case 'timer': return t.bid_time;
+    case 'timer': return t.buyin_cents||0;
     default: return t.max_seats-t.filled;
   }
 }
@@ -1199,22 +1215,23 @@ function renderRows(){
   list.sort((a,b)=>{const x=sortKey(a),y=sortKey(b);return (x>y?1:x<y?-1:0)*L.dir});
   const arrow=k=>L.sort===k?(L.dir===1?' \u25B2':' \u25BC'):'';
   const hb=(k,label,al)=>`<button data-sort="${k}" class="${L.sort===k?'on':''}" style="text-align:${al}">${label}${arrow(k)}</button>`;
-  el.innerHTML = `<div class="trow h">${hb('name','Tavolo','left')}${hb('seats','Posti','right')}${hb('timer','Timer','right')}</div>` +
+  el.innerHTML = `<div class="trow h">${hb('name','Tavolo','left')}${hb('seats','Posti','right')}${hb('timer','Buy-in','right')}</div>` +
     (list.length? list.map(t=>{
       const full=t.filled>=t.max_seats, hot=!full && t.max_seats-t.filled===1, sel=L.sel===t.id;
       let html=`<button class="trow data ${sel?'sel':''}" data-row="${t.id}" aria-expanded="${sel}">
         <span class="nm"><i class="st ${hot?'hot':''}"></i><span class="tt"><span class="t">Tavolo ${t.code}</span><small>di ${t.host_name||'?'}</small></span></span>
-        <span class="num">${t.filled}/${t.max_seats}</span><span class="num">${t.bid_time}s</span></button>`;
+        <span class="num">${t.filled}/${t.max_seats}</span><span class="num">${eurS(t.buyin_cents)}</span></button>`;
       if(sel){
         const total=needTotal(t.need);
         html+=`<div class="tdetail">
           <div class="facts">
-            <div class="fact"><b>Gratis</b><span>ingresso</span></div>
+            <div class="fact"><b>${eurS(t.buyin_cents)}</b><span>buy-in</span></div>
+            ${t.buyin_cents?`<div class="fact"><b>${eurS(Math.floor(t.buyin_cents*t.max_seats*(t.max_seats===2?1:.9)))}</b><span>montepremi</span></div>`:''}
             <div class="fact"><b>${total}</b><span>calciatori in rosa</span></div>
             <div class="fact"><b>${t.max_seats-t.filled}</b><span>posti liberi</span></div>
           </div>
           <ul class="rules">${tableRules(t).map(r=>`<li>${r}</li>`).join('')}</ul>
-          <button class="btn wide" data-join="${t.id}" ${full?'disabled':''}>${full?'Asta in partenza':'Siediti al tavolo'}</button>
+          <button class="btn wide" data-join="${t.id}" ${full?'disabled':''}>${full?'Asta in partenza':t.buyin_cents?'Siediti \u00b7 '+eur(t.buyin_cents):'Siediti al tavolo'}</button>
         </div>`;
       }
       return html;
