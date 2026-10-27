@@ -953,7 +953,7 @@ async function showTornei(){
     if(ids.length){ const {data:mt}=await sb.from('tournaments').select('*').in('id',ids).order('created_at',{ascending:false}); mine=mt||[]; }
   }catch(e){}
   const mineIds=new Set(mine.map(t=>t.id));
-  const st=t=>t.status==='open'?`Iscrizioni fino a ${dtS(t.deadline)}`:t.status==='roster'?'Composizione rose':t.status==='running'?'In corso':'Concluso';
+  const st=t=>t.status==='cancelled'?'Annullato, buy-in rimborsato':t.status==='open'?`Iscrizioni fino a ${dtS(t.deadline)}`:t.status==='roster'?'Composizione rose':t.status==='running'?'In corso':'Concluso';
   const chip=(k,v,l)=>`<button class="chip ${TF[k]===v?'on':''}" data-tf="${k}:${v}">${l}</button>`;
   $app.innerHTML=`${segHTML('tornei')}
     <div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button><div class="ttl"><b>Tornei</b><span class="dim">A eliminazione diretta</span></div>${walletPill()}</div>
@@ -979,7 +979,7 @@ function openTournament(t,joined){
   openSheet(`<h2>${TN_FMT[t.format]} \u00b7 ${t.size} persone</h2>
     <div class="facts"><div class="fact"><b>${eurS(t.buyin_cents)}</b><span>buy-in</span></div><div class="fact"><b>${t.buyin_cents?eurS(pool):'\\u2014'}</b><span>montepremi</span></div><div class="fact"><b>${t.filled}/${t.size}</b><span>iscritti</span></div></div>
     <ul class="rules"><li>${t.rounds} turni a eliminazione diretta, uno per giornata di Serie A, a partire dalla ${t.md_start}\u00aa giornata</li>
-      <li>Iscrizioni fino a ${dtS(t.deadline)}. Se non si arriva a ${t.size}, parte con chi c\\u2019\u00e8 (da 2 persone) e chi non ha avversario passa il turno</li>
+      <li>Parte solo quando si raggiungono ${t.size} iscritti, entro ${dtS(t.deadline)}. Se non si arriva a ${t.size}, il torneo \u00e8 annullato e il buy-in ti torna. Nessuno passa a tavolino</li>
       <li>${t.format==='scorpion'||t.format==='scorpione'?'Rose di 3 calciatori scelti in aste Scorpion a gruppi':'Rosa costruita dal listone con un budget uguale per tutti'}: la stessa per tutto il torneo</li>
       <li>Vince lo scontro chi fa pi\u00f9 punti; a parit\u00e0 passa chi ha pi\u00f9 punti totali</li>
       ${t.buyin_cents?`<li>Premi ai primi ${pc.length} (${pc.join('% / ')}%), commissione 10%</li>`:''}
@@ -999,7 +999,7 @@ async function showBracket(id){
   const rounds=(t.bracket&&t.bracket.rounds)||null;
   let body;
   if(!rounds){
-    body=`<p class="dim" style="margin:12px 0">Il tabellone viene sorteggiato alla chiusura delle iscrizioni (${dtS(t.deadline)}) o quando il torneo \u00e8 al completo.</p>
+    body=`<p class="dim" style="margin:12px 0">Il tabellone viene sorteggiato appena il torneo \u00e8 al completo. Se non si riempie entro ${dtS(t.deadline)}, viene annullato e il buy-in rimborsato.</p>
       <div class="sec-row"><h2>Iscritti (${ents.length}/${t.size})</h2></div>${ents.map(x=>`<div class="rrow"><span>${escH(x.name||'Giocatore')}${x.user_id===ME?' <small class="dim">\u00b7 tu</small>':''}</span></div>`).join('')||'<p class="dim">Nessuno ancora.</p>'}`;
   } else {
     const nm=(m,s)=>m[s]?`<div class="bm ${m[s]===ME?'me':''}"><i>${m['s'+s]||''}</i>${escH(m[s+'n']||'')}</div>`:`<div class="bm tbd">${m.bye&&s==='b'?'bye':'da definire'}</div>`;
