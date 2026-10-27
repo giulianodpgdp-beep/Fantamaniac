@@ -214,7 +214,7 @@ button:focus-visible{outline:2px solid var(--chip);outline-offset:2px}
 .stage::before{display:none}
 .stage>*{position:relative}
 .tname{text-shadow:0 2px 10px rgba(0,0,0,.75);font-size:30px;font-weight:600;line-height:1.1;padding:0 76px}
-.seg{display:grid;grid-template-columns:1fr 1fr;background:#061c0f;border-radius:999px;padding:4px;margin:4px 0 6px}
+.seg{display:grid;grid-template-columns:1fr 1fr 1fr;background:#061c0f;border-radius:999px;padding:4px;margin:4px 0 6px}
 .seg button{min-height:42px;border-radius:999px;font-weight:600;font-size:16px;color:var(--chalk-dim)}
 .seg button.on{background:var(--chip);color:#10230f}
 .sgtheme{--chip:#e8b04a;background:linear-gradient(180deg,#1b1408,#0b0b0b 420px);margin:-8px -16px 0;padding:8px 16px 20px;min-height:calc(100vh/.86 - 90px)}
@@ -466,7 +466,7 @@ function openNameSheet(){
   inp.onkeydown=e=>{ if(e.key==='Enter') save(); };
 }
 function openMenu(){
-  const items=[['home','Home','home'],['aste','Sit&Go','gavel'],['classic','Asta Classica','league'],['how','Come funziona','gavel'],['rose','Le mie rose','league'],['friends','Amici','user'],['rank','Classifica','cup'],['prof','Profilo','user']];
+  const items=[['home','Home','home'],['gioca','Gioca','gavel'],['aste','Sit&Go','gavel'],['tornei','Tornei','cup'],['how','Come funziona','gavel'],['rose','Le mie rose','league'],['friends','Amici','user'],['rank','Classifica','cup'],['prof','Profilo','user']];
   openSheet(`<h2>Menu</h2><div class="menu">${items.map(([k,l,ic])=>`<button data-go="${k}">${IC[ic]}${l}</button>`).join('')}</div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">${logoSVG(52)}<div><div class="disp" style="font-size:24px;font-style:italic">Fanta<span style="color:var(--chip)">Maniac</span></div><div class="dim" style="font-size:13px">Versione di prova: calciatori inventati, ingresso gratis con crediti virtuali.</div></div></div>`);
   document.querySelectorAll('#sheet [data-go]').forEach(b=>b.onclick=()=>{ closeSheet(); goTo(b.dataset.go); });
@@ -480,7 +480,7 @@ function openMenu(){
     box.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{ closeSheet(); ({notices:showNotices,credits:showCredits,rosters:showRosters,lineups:showLineups})[b.dataset.lm](cl.lg.id); });
   }
 }
-function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends,classic:()=>showLobby('classic')})[k](); }
+function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends,classic:()=>showLobby('classic'),gioca:showGioca,tornei:()=>{STORE.homeTab='tornei';saveStore();showHome();}})[k](); }
 
 /* ---------- ICONE ---------- */
 const IC = {
@@ -517,7 +517,7 @@ function setNav(show, active='home'){
   const nav=document.getElementById('nav');
   nav.hidden=!show;
   if(!show) return;
-  const items=[['home','Home','home'],['aste','Sit&Go','gavel'],['rose','Rose','league'],['rank','Classifica','cup'],['prof','Profilo','user']];
+  const items=[['home','Home','home'],['gioca','Gioca','gavel'],['rose','Rose','league'],['rank','Classifica','cup'],['prof','Profilo','user']];
   nav.querySelector('.in').innerHTML=items.map(([k,l,ic])=>`<button data-nav="${k}" class="${k===active?'on':''}">${IC[ic]}<span>${l}</span></button>`).join('');
   nav.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>goTo(b.dataset.nav));
 }
@@ -547,7 +547,7 @@ const HERO_ART = '<svg width="128" height="128" viewBox="0 0 128 128" aria-hidde
 
 /* ---------- HOME ---------- */
 async function showAste(){
-  stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'aste');
+  stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'gioca');
   await fetchOpenRooms();
   const CNT={};
   try{ await Promise.all(MODES.filter(m=>m.key!=='classic').map(async m=>{ const {count}=await sb.from('rooms').select('id',{count:'exact',head:true}).eq('status','open').eq('is_private',false).eq('mode',m.key).lt('filled',99); CNT[m.key]=count||0; })); }catch(e){}
@@ -906,7 +906,37 @@ function openStartAuction(lg){
     NEWLG=lg; closeSheet(); curMode=k; await showLobby(k); openCreate(k);
   });
 }
-const segHTML=a=>`<div class="seg"><button class="${a==='leghe'?'on':''}" data-seg="leghe">Le mie leghe</button><button class="${a==='sg'?'on':''}" data-seg="sg">Sit &amp; Go</button></div>`;
+const segHTML=a=>`<div class="seg"><button class="${a==='leghe'?'on':''}" data-seg="leghe">Leghe</button><button class="${a==='sg'?'on':''}" data-seg="sg">Sit &amp; Go</button><button class="${a==='tornei'?'on':''}" data-seg="tornei">Tornei</button></div>`;
+async function showTornei(){
+  await fetchWallet();
+  $app.innerHTML=`${segHTML('tornei')}
+    <div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button><div class="ttl"><b>Tornei</b><span class="dim">A eliminazione diretta</span></div>${walletPill()}</div>
+    <section class="sgstage" style="border-color:#5b8def;background:radial-gradient(120% 90% at 50% 0,#17306a,#0a1226)"><span class="dim">Tabellone fino a 64 partecipanti</span><div class="sgbal" style="color:#bcd2ff;font-size:44px">In arrivo</div><span class="dim">Un turno per ogni giornata di Serie A</span></section>
+    <div class="sec-row"><h2>Come funzioneranno</h2></div>
+    <div class="gloss"><b>Formati</b><span>Scorpion e Listone, con iscrizione e buy-in in \u20ac virtuali, legati al tuo account.</span></div>
+    <div class="gloss"><b>Turni</b><span>4 persone fanno 2 giornate, 8 ne fanno 3, 16 ne fanno 4, fino a 6 turni con 64 persone.</span></div>
+    <div class="gloss"><b>Scontri</b><span>Ogni turno \u00e8 uno scontro diretto: passa chi fa pi\u00f9 punti. La rosa \u00e8 la stessa per tutto il torneo.</span></div>
+    <div class="gloss"><b>Iscrizione</b><span>Hai tempo fino a una scadenza per iscriverti e, nel Listone, comporre la rosa. Poi si sorteggia il tabellone.</span></div>
+    <p class="note">Lo stiamo costruendo: prima servono i voti della Serie A per decidere chi passa il turno.</p>`;
+  bindSeg(); document.getElementById('dmenu').onclick=openMenu; const w=document.getElementById('wal'); if(w) w.onclick=openWallet;
+}
+function showGioca(){
+  stopTick(); stopLobby(); G=null; setNav(true,'gioca');
+  const card=(id,t,d,ic,g,soon)=>`<button class="mcard" data-gc="${id}"><div class="top ${g}">${IC[ic]}</div><div class="bd"><b>${t}</b><span class="ds">${d}</span><span class="pill ${soon?'soon':''}">${soon?'In arrivo':'Apri'}</span></div></button>`;
+  $app.innerHTML=`${headerHTML()}<h2 class="sec">Come vuoi giocare?</h2>
+    <div class="mgrid">
+      ${card('leghe','Leghe','Con gli amici, per tutta la stagione: asta classica, campionato, gestione.','league','g1')}
+      ${card('sg','Sit & Go','Tavoli pubblici veloci, come al poker. Una giornata di Serie A.','bolt','g5')}
+      ${card('tornei','Tornei','A eliminazione diretta, fino a 64 partecipanti.','cup','g2')}
+      ${card('amici','Amici','Sfide gratis e storico dei risultati.','user','g6')}
+      ${card('bot','Contro FantaManiac','Scegli quanti giocatori veri e quanti bot.','target','g5',true)}
+    </div>`;
+  bindHeader();
+  $app.querySelectorAll('[data-gc]').forEach(b=>b.onclick=()=>{ const k=b.dataset.gc;
+    if(k==='amici') return showFriends(); if(k==='bot') return toast('In arrivo');
+    if(k==='sg'){ STORE.homeTab='sg'; saveStore(); return showAste(); }
+    STORE.homeTab=k; saveStore(); showHome(); });
+}
 function bindSeg(){ $app.querySelectorAll('[data-seg]').forEach(b=>b.onclick=()=>{ STORE.homeTab=b.dataset.seg; saveStore(); showHome(); }); }
 async function showSitGo(){
   await Promise.all([fetchWallet(), fetchOpenRooms()]);
@@ -947,6 +977,7 @@ async function showSitGo(){
 async function showHome(){
   stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'home');
   if(STORE.homeTab==='sg') return showSitGo();
+  if(STORE.homeTab==='tornei') return showTornei();
   await Promise.all([fetchOpenRooms(), fetchLeagues()]);
   const cur = LEAGUES.find(l=>l.lg.id===STORE.leagueId) || LEAGUES[0];
   const tn=teamName(cur);
@@ -987,7 +1018,7 @@ async function showHome(){
     <button class="lsel" id="lsel"><span>${l.name}</span>${IC.chev}</button>
     ${stageHTML(cur)}
     <div style="margin-top:14px">${act}</div>
-    <button class="btn wide ghost" id="dcal" style="margin-top:8px">Calendario</button>
+    <div style="display:flex;gap:8px;margin-top:8px"><button class="btn ghost" id="dcal" style="flex:1">Calendario</button><button class="btn ghost" id="dcls" style="flex:1">Classifica</button></div>
     <div class="kpis" style="margin-top:14px">${kp.map(k=>`<div><b${String(k[0]).length>5?' style="font-size:22px;padding-top:6px"':''}>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>
     ${r&&r.status!=='done'&&cur.seat?'':resumeHTML()}${hotHTML}
     <p class="note">Invita gli amici con il pulsante di condivisione: il codice della lega \u00e8 <b>${l.code}</b>. Punteggi e classifica arrivano quando colleghiamo i voti della Serie A.</p>`;
@@ -1006,6 +1037,7 @@ async function showHome(){
   if(g('lsel0')) g('lsel0').onclick=openLeagueSheet;
   if(g('dstart')) g('dstart').onclick=()=>openStartAuction(cur.lg);
   if(g('dcal')) g('dcal').onclick=()=>showCalendar(cur.lg.id);
+  if(g('dcls')) g('dcls').onclick=()=>showLeagueTable(cur.lg.id);
   if(g('dgo')) g('dgo').onclick=()=>enterRoom(cur.room.id);
   if(g('djoin')) g('djoin').onclick=()=>joinTable(cur.room);
   if(g('dlu')) g('dlu').onclick=()=>showLineup(cur.room.id,1,'home');
@@ -1023,7 +1055,7 @@ async function showHome(){
 
 /* ---------- MODALITA' IN ARRIVO ---------- */
 function showSoon(id){
-  stopTick(); stopLobby(); G=null; setNav(true,'aste');
+  stopTick(); stopLobby(); G=null; setNav(true,'gioca');
   const m=MODES.find(x=>x.id===id);
   $app.innerHTML = `${headerHTML()}${chipsHTML(id)}
     <div class="soon-box"><h2>${m.name}</h2><p class="dim" style="margin:8px 0 14px">${m.desc}</p><span class="pill soon">In arrivo</span>
@@ -1858,6 +1890,17 @@ async function openWallet(){
 }
 function route_refresh(){ if(document.querySelector('.dhead')) showHome(); }
 
+/* ---------- CLASSIFICA DI LEGA ---------- */
+async function showLeagueTable(id){
+  stopTick(); stopLobby(); G=null; setNav(false);
+  let mem=[]; try{ const {data}=await sb.from('league_members').select('user_id,name,team_name,emblem').eq('league_id',id).eq('removed',false).order('joined_at'); mem=data||[]; }catch(e){}
+  $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">Classifica</h1><span style="width:34px"></span></div>
+    <div class="trow h" style="grid-template-columns:30px 1fr 56px;margin-top:12px"><span>#</span><span>Squadra</span><span style="text-align:right">Punti</span></div>
+    ${mem.map((m,i)=>{ const e=embOf({id:m.user_id,emblem:m.emblem}); return `<div class="trow" style="grid-template-columns:30px 1fr 56px"><span class="num" style="text-align:left">${i+1}</span><span class="nm"><span class="pcrest">${crestSVG(e[0],e[1],26)}</span><span class="tt"><span class="t">${escH(m.team_name||((m.name||'Squadra')+' FC'))}</span><small>${escH(m.name||'')}</small></span></span><span class="num">0</span></div>`; }).join('')}
+    <p class="note">La classifica si riempie quando collegheremo i voti della Serie A e partir\u00e0 il campionato di lega.</p>`;
+  document.getElementById('tb-back').onclick=showHome;
+}
+
 /* ---------- CALENDARIO ---------- */
 async function showCalendar(id){
   stopTick(); stopLobby(); G=null; setNav(false);
@@ -2159,7 +2202,7 @@ function showHow(){
     ${steps.map((x,i)=>`<div class="step"><i>${i+1}</i><div><b>${x[0]}</b><div class="dim" style="font-size:14px">${x[1]}</div></div></div>`).join('')}
     <h2 class="sec" style="font-size:24px">Le parole del gioco</h2>
     ${gl.map(x=>`<div class="gloss"><b>${x[0]}</b><span>${x[1]}</span></div>`).join('')}
-    <button class="btn wide" id="go" style="margin-top:20px">Vai alle aste</button>`,'aste');
+    <button class="btn wide" id="go" style="margin-top:20px">Vai alle aste</button>`,'gioca');
   document.getElementById('go').onclick=showAste;
 }
 function showHistory(){
