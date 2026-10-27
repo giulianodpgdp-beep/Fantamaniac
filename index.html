@@ -378,6 +378,21 @@ details.roster summary{cursor:pointer;font-weight:600;min-height:32px;display:fl
 .lpstats span{font-size:15px;color:var(--chalk-dim)}
 .lpadm b{display:block;font-size:28px;font-weight:500;margin-top:8px}
 .lpadm span{color:#f2c36b;font-weight:700;font-size:20px}
+.psearch{display:flex;gap:8px;align-items:center;background:#020d1c;border-radius:26px;padding:8px;margin-bottom:10px}
+.psearch .inp{flex:1;border-radius:20px;min-height:46px}
+.pcard{background:#020b17;border-radius:24px;padding:12px;margin-bottom:10px}
+.pteam{display:flex;align-items:center;gap:10px;padding:2px 4px 10px}
+.pteam b{font-size:20px;font-weight:600}
+.pcrest{width:44px;height:44px;border-radius:50%;background:rgba(255,255,255,.08);display:grid;place-items:center}
+.pwho{display:flex;align-items:center;gap:10px;background:#0a3a9a;border-radius:20px;padding:10px 12px}
+.pav{width:44px;height:44px;border-radius:50%;background:#1a56d6;display:grid;place-items:center;flex:none}
+.pav.ad{background:#f4b95a}
+.pnm{flex:1;min-width:0}.pnm b{display:block;font-size:19px;font-weight:600;color:#cfe0ff}.pnm small{color:#cfe0ff;opacity:.85;font-size:14px}
+.pgear{width:48px;height:48px;border-radius:14px;background:#b9c7f5;color:#0a2a6a;display:grid;place-items:center;flex:none}
+.ptabs{position:fixed;left:0;right:0;bottom:0;display:flex;justify-content:space-around;background:#020b17;padding:10px 0 14px;z-index:5}
+.ptabs button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:140px;padding:6px 14px;border-radius:22px;font-weight:600;font-size:14px}
+.ptabs button.on{background:#0a3a9a}
+.ptabs button span{font-size:20px}
 </style>
 </head>
 <body>
@@ -526,22 +541,22 @@ async function showAste(){
 let LEAGUES=[], NEWLG=null;
 async function fetchLeagues(){
   try{
-    const {data:mm}=await sb.from('league_members').select('league_id').eq('user_id',ME);
+    const {data:mm}=await sb.from('league_members').select('league_id,team_name,emblem,is_admin').eq('user_id',ME).eq('removed',false);
     const ids=(mm||[]).map(x=>x.league_id);
     if(!ids.length){ LEAGUES=[]; return; }
     const [a,b,c]=await Promise.all([
       sb.from('leagues').select('*').in('id',ids).is('deleted_at',null).order('created_at',{ascending:false}),
       sb.from('rooms').select('*').in('league_id',ids),
-      sb.from('league_members').select('league_id').in('league_id',ids)]);
+      sb.from('league_members').select('league_id').in('league_id',ids).eq('removed',false)]);
     const ll=a.data||[], rr=b.data||[], cm=c.data||[];
     let ss=[]; const rids=rr.map(r=>r.id);
     if(rids.length){ const {data}=await sb.from('seats').select('room_id,seat,credits').eq('user_id',ME).in('room_id',rids); ss=data||[]; }
     LEAGUES=ll.map(l=>{ const room=rr.find(r=>r.league_id===l.id)||null;
-      return {lg:l, room, seat:room?(ss.find(x=>x.room_id===room.id)||null):null, members:cm.filter(x=>x.league_id===l.id).length}; });
+      return {lg:l, room, me:(mm||[]).find(x=>x.league_id===l.id)||{}, seat:room?(ss.find(x=>x.room_id===room.id)||null):null, members:cm.filter(x=>x.league_id===l.id).length}; });
   }catch(e){}
 }
 const JERSEY = '<svg class="jersey" viewBox="0 0 200 200" aria-hidden="true"><defs><clipPath id="jc"><path d="M62 22L86 12Q100 30 114 12L138 22L182 54L160 88L140 72V182H60V72L40 88L18 54Z"/></clipPath></defs><g clip-path="url(#jc)"><rect width="200" height="200" fill="#f4f7f2"/>'+[36,66,96,126,156].map(y=>`<rect x="0" y="${y}" width="200" height="12" fill="#2f9e4f"/>`).join('')+'<rect x="0" y="40" width="40" height="60" fill="#2f9e4f" opacity=".0"/><path d="M18 54L40 88L58 78L36 44Z" fill="#2f9e4f"/><path d="M182 54L160 88L142 78L164 44Z" fill="#2f9e4f"/></g><path d="M86 12Q100 34 114 12" fill="none" stroke="#2f9e4f" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="112" r="15" fill="#fff" stroke="#1a6b38" stroke-width="2"/><path d="M100 103l7 5-2.6 8h-8.8l-2.6-8z" fill="#111"/></svg>';
-function teamName(){ return STORE.name ? STORE.name+' FC' : 'La mia squadra'; }
+function teamName(cur){ return (cur&&cur.me&&cur.me.team_name) || (STORE.name ? STORE.name+' FC' : 'La mia squadra'); }
 async function leagueInvite(l){
   const url=location.origin+location.pathname+'?l='+l.code, text=`Entra nella mia lega "${l.name}" su FantaManiac! Codice lega: ${l.code}`;
   try{ if(navigator.share){ await navigator.share({title:'FantaManiac',text,url}); return; } }catch(e){ if(e&&e.name==='AbortError') return; }
@@ -589,12 +604,100 @@ function crestSVG(a,b,size){
     <path d="M6 6H94V62Q94 100 50 114Q6 100 6 62Z" fill="none" stroke="rgba(255,255,255,.55)" stroke-width="2.5"/>
     <text x="50" y="68" text-anchor="middle" font-size="42" dominant-baseline="middle">${EMB_SYM[b]}</text></svg>`;
 }
+
+let PART={q:'',filter:'all',tab:'list'};
+function openTeamEditor(l,m,done){
+  let a,b; { const e=embOf({id:m.user_id,emblem:m.emblem}); a=e[0]; b=e[1]; }
+  let nm=m.team_name||((m.name||'Squadra')+' FC');
+  const draw=()=>{
+    openSheet(`<h2>Squadra</h2><input id="tn" class="inp" maxlength="24" value="${nm.replace(/"/g,'&quot;')}" autocomplete="off">
+      <div style="display:flex;justify-content:center;margin:10px 0">${crestSVG(a,b,80)}</div>
+      <div class="frow" style="flex-wrap:wrap;justify-content:center;margin:6px 0">${EMB_COL.map((c,i)=>`<button class="chip" data-ca="${i}" style="background:linear-gradient(90deg,${c[0]} 50%,${c[1]} 50%);min-width:44px;height:36px;${i===a?'outline:3px solid #fff;':''}" aria-label="Colori ${i+1}"></button>`).join('')}</div>
+      <div class="frow" style="flex-wrap:wrap;justify-content:center;margin:6px 0 12px">${EMB_SYM.map((x,i)=>`<button class="chip ${i===b?'on':''}" data-sb="${i}" style="font-size:22px;min-width:44px">${x}</button>`).join('')}</div>
+      <button class="btn wide" id="tn-ok">Salva</button>`);
+    const keep=()=>{ nm=document.getElementById('tn').value; };
+    document.querySelectorAll('#sheet [data-ca]').forEach(x=>x.onclick=()=>{ keep(); a=+x.dataset.ca; draw(); });
+    document.querySelectorAll('#sheet [data-sb]').forEach(x=>x.onclick=()=>{ keep(); b=+x.dataset.sb; draw(); });
+    document.getElementById('tn-ok').onclick=async()=>{
+      const v=document.getElementById('tn').value.replace(/[<>&"'`]/g,'').trim();
+      if(v.length<2){ toast('Nome troppo corto'); return; }
+      try{ await rpc('update_member_team',{p_league:l.id,p_user:m.user_id,p_team:v,p_emblem:a+':'+b}); closeSheet(); done(); }catch(e){ toast(errMsg(e)); }
+    };
+  };
+  draw();
+}
+async function showParticipants(id){
+  stopTick(); stopLobby(); G=null; setNav(false);
+  await fetchLeagues();
+  const cur=LEAGUES.find(x=>x.lg.id===id); if(!cur) return showHome();
+  const l=cur.lg, own=l.owner===ME, adm=own||!!cur.me.is_admin;
+  let mem=[];
+  try{ const {data}=await sb.from('league_members').select('user_id,name,team_name,emblem,is_admin').eq('league_id',l.id).eq('removed',false).order('joined_at'); mem=data||[]; }catch(e){}
+  const isAd=m=>m.user_id===l.owner||m.is_admin;
+  const crown='<svg viewBox="0 0 24 24" width="26" height="26" fill="#a86a00" aria-hidden="true"><path d="M3 8l4.5 4L12 5l4.5 7L21 8l-2 11H5z"/></svg>';
+  const person='<svg viewBox="0 0 24 24" width="24" height="24" fill="#cfe0ff" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z"/></svg>';
+  const gear='<svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>';
+  const listHTML=()=>{
+    const q=norm(PART.q.trim());
+    const rows=mem.filter(m=>(PART.filter==='all'||isAd(m))&&(!q||norm((m.name||'')+' '+(m.team_name||'')).includes(q)));
+    if(!rows.length) return '<p class="dim" style="padding:14px">Nessun partecipante trovato.</p>';
+    return rows.map(m=>{
+      const [ea,eb]=embOf({id:m.user_id,emblem:m.emblem}), tn=m.team_name||((m.name||'Squadra')+' FC');
+      const can = m.user_id===ME || (adm && m.user_id!==l.owner);
+      return `<div class="pcard"><div class="pteam"><span class="pcrest">${crestSVG(ea,eb,30)}</span><b>${tn}</b></div>
+        <div class="pwho"><span class="pav ${isAd(m)?'ad':''}">${isAd(m)?crown:person}</span>
+          <span class="pnm"><b>${m.name||'Senza nome'}</b><small>${m.user_id===l.owner?'Superadmin':m.is_admin?'Admin':'Partecipante'}${m.user_id===ME?' \u00b7 tu':''}</small></span>
+          ${can?`<button class="pgear" data-pm="${m.user_id}" aria-label="Azioni">${gear}</button>`:''}</div></div>`;
+    }).join('');
+  };
+  const draw=()=>{
+    const body = PART.tab==='add'
+      ? `<div class="lpcard" style="margin-top:8px"><h2 style="margin:4px 0 8px">Aggiungi partecipanti</h2><p class="dim">Manda il link o il codice ai tuoi amici: entrano nella lega e scelgono la loro squadra.</p>
+          <div class="codebox" style="margin:14px 0"><span class="dim">Codice lega</span><b class="code">${l.code}</b></div>
+          <button class="btn wide" id="pa-inv">Invita gli amici</button></div>`
+      : `<div class="psearch"><input id="pq" class="inp" type="search" placeholder="Cerca partecipanti" value="${PART.q.replace(/"/g,'&quot;')}" autocomplete="off"><button class="chip ${PART.filter==='admin'?'on':''}" id="pf" aria-label="Filtro">${PART.filter==='admin'?'Admin':'Tutti'}</button></div>
+         <div id="plist">${listHTML()}</div>`;
+    $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">Gestione partecipanti</h1><span style="width:34px"></span></div>
+      ${body}
+      <div class="ptabs"><button class="${PART.tab==='list'?'on':''}" data-pt="list"><span>\uD83D\uDC65</span>Partecipanti (${mem.length})</button><button class="${PART.tab==='add'?'on':''}" data-pt="add"><span>\u2795</span>Aggiungi</button></div>`;
+    const g=x=>document.getElementById(x);
+    g('tb-back').onclick=()=>showLeagueProfile(l.id);
+    $app.querySelectorAll('[data-pt]').forEach(b=>b.onclick=()=>{ PART.tab=b.dataset.pt; draw(); });
+    if(g('pa-inv')) g('pa-inv').onclick=()=>leagueInvite(l);
+    if(g('pq')) g('pq').oninput=()=>{ PART.q=g('pq').value; g('plist').innerHTML=listHTML(); bindActs(); };
+    if(g('pf')) g('pf').onclick=()=>{ PART.filter=PART.filter==='all'?'admin':'all'; draw(); };
+    bindActs();
+  };
+  const reload=()=>showParticipants(l.id);
+  const bindActs=()=>$app.querySelectorAll('[data-pm]').forEach(b=>b.onclick=()=>{
+    const m=mem.find(x=>x.user_id===b.dataset.pm); if(!m) return;
+    const tn=m.team_name||((m.name||'Squadra')+' FC'), target=m.user_id!==l.owner;
+    openSheet(`<h2>${m.name||'Partecipante'}</h2><p class="dim" style="margin:2px 0 10px">${tn}</p>
+      ${own&&target&&m.user_id!==ME?`<button class="btn wide ghost" id="ac-ad">${m.is_admin?'Togli admin':'Rendi admin'} \uD83D\uDC51</button>`:''}
+      <button class="btn wide ghost" id="ac-ed" style="margin-top:8px">Modifica squadra</button>
+      ${adm&&target&&m.user_id!==ME?`<button class="btn wide ghost" id="ac-sub" style="margin-top:8px">Sostituisci partecipante</button>
+      <button class="btn wide ghost" id="ac-del" style="margin-top:8px;color:#ff9aa2">Elimina</button>`:''}
+      <button class="btn wide" data-close style="margin-top:8px">Chiudi</button>`);
+    const g=x=>document.getElementById(x);
+    document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+    if(g('ac-ad')) g('ac-ad').onclick=async()=>{ try{ await rpc('set_member_admin',{p_league:l.id,p_user:m.user_id,p_admin:!m.is_admin}); closeSheet(); toast(m.is_admin?'Admin rimosso':'Ora \u00e8 admin'); reload(); }catch(e){ toast(errMsg(e)); } };
+    g('ac-ed').onclick=()=>openTeamEditor(l,m,reload);
+    if(g('ac-sub')) g('ac-sub').onclick=()=>{ closeSheet(); toast('Sostituzione: in arrivo'); };
+    if(g('ac-del')) g('ac-del').onclick=()=>{
+      openSheet(`<h2>Eliminare ${m.name||'il partecipante'}?</h2><p class="dim" style="margin:6px 0 12px">Esce dalla lega e non potr\u00e0 rientrare con il codice. Le rose gi\u00e0 assegnate restano com\u2019erano.</p>
+        <button class="btn wide" id="dd-ok" style="background:#e5534b;color:#fff">S\u00ec, elimina</button><button class="btn wide ghost" data-close style="margin-top:8px">Annulla</button>`);
+      document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+      g('dd-ok').onclick=async()=>{ try{ await rpc('remove_member',{p_league:l.id,p_user:m.user_id}); closeSheet(); toast('Partecipante eliminato'); reload(); }catch(e){ toast(errMsg(e)); } };
+    };
+  });
+  draw();
+}
 async function showLeagueProfile(id){
   stopTick(); stopLobby(); G=null; setNav(false);
   await fetchLeagues();
   const cur=LEAGUES.find(x=>x.lg.id===id);
   if(!cur) return showHome();
-  const l=cur.lg, mine=l.owner===ME, [ea,eb]=embOf(l), yr=l.founded||new Date(l.created_at).getFullYear()||new Date().getFullYear();
+  const l=cur.lg, own=l.owner===ME, mine=own||!!cur.me.is_admin, [ea,eb]=embOf(l), yr=l.founded||new Date(l.created_at).getFullYear()||new Date().getFullYear();
   let adm='';
   try{ const {data}=await sb.from('league_members').select('name').eq('league_id',l.id).eq('user_id',l.owner).maybeSingle(); adm=(data&&data.name)||'Amministratore'; }catch(e){ adm='Amministratore'; }
   const pencil=`<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>`;
@@ -608,12 +711,14 @@ async function showLeagueProfile(id){
       <div class="lpadm"><b>${adm}</b><span>Superadmin \uD83D\uDC51</span></div>
     </div>
     <p class="dim" style="text-align:center;margin:12px 0">${l.roles==='mantra'?'Mantra':'Classic'} \u00b7 codice lega <b>${l.code}</b></p>
-    <button class="btn wide ghost" id="lp-inv">Invita gli amici</button>
-    ${mine?`<hr class="lpsep" style="margin:18px 0"><button class="btn wide ghost" id="lp-reset" style="margin-top:8px">Reset Lega</button>
-    <button class="btn wide ghost" id="lp-del" style="margin-top:8px;color:#ff9aa2">Elimina Lega</button>`:`<p class="note">Solo il superadmin pu\u00f2 modificare, resettare o eliminare la lega.</p>`}`;
+    <button class="btn wide" id="lp-part">Partecipanti</button>
+    <button class="btn wide ghost" id="lp-inv" style="margin-top:8px">Invita gli amici</button>
+    ${own?`<hr class="lpsep" style="margin:18px 0"><button class="btn wide ghost" id="lp-reset" style="margin-top:8px">Reset Lega</button>
+    <button class="btn wide ghost" id="lp-del" style="margin-top:8px;color:#ff9aa2">Elimina Lega</button>`:`<p class="note">${mine?'Solo il superadmin pu\u00f2 resettare o eliminare la lega.':'Solo gli admin possono modificare la lega.'}</p>`}`;
   const g=x=>document.getElementById(x);
   g('tb-back').onclick=showHome;
   g('lp-inv').onclick=()=>leagueInvite(l);
+  g('lp-part').onclick=()=>showParticipants(l.id);
   const save=async(patch)=>{
     const n={name:l.name,founded:l.founded||yr,emblem:ea+':'+eb,...patch};
     try{ await rpc('update_league_profile',{p_league:l.id,p_name:n.name,p_founded:n.founded,p_emblem:n.emblem}); closeSheet(); showLeagueProfile(l.id); }
@@ -695,8 +800,8 @@ function openStartAuction(lg){
 async function showHome(){
   stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'home');
   await Promise.all([fetchOpenRooms(), fetchLeagues()]);
-  const tn=teamName();
   const cur = LEAGUES.find(l=>l.lg.id===STORE.leagueId) || LEAGUES[0];
+  const tn=teamName(cur);
   const hot = TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   const hotHTML = hot?`<div class="sec-row"><h2>Prossima asta</h2><button class="rules-toggle" id="dall">Vedi le aste</button></div>
     <div class="strip"><div class="t"><b>${modeName(hot.mode)} \u00b7 ${CALL_LABEL[hot.call]||''}</b><span>${hot.seats} persone. ${hot.seats-hot.filled===1?'Manca 1 giocatore':`Mancano ${hot.seats-hot.filled} giocatori`} per partire</span></div><button class="btn" id="hotjoin">Siediti</button></div>`:'';
@@ -712,12 +817,12 @@ async function showHome(){
       ${openTables.length?openTables.map(t=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${modeName(t.mode)} \u00b7 ${CALL_LABEL[t.call]||''} \u00b7 ${t.roles==='mantra'?'Mantra':'Classic'}</b><span>Tavolo ${t.code} di ${t.host_name||'?'} \u00b7 ${t.filled}/${t.seats} posti \u00b7 ${t.credits} cr</span></div><button class="btn" data-tj="${t.id}">Siediti</button></div>`).join(''):`<p class="dim" style="margin:8px 0">Nessun tavolo aperto adesso. Creane uno dalla sezione Aste e invita gli amici.</p>`}
       <button class="btn wide ghost" id="go" style="margin-top:12px">Vai alle aste</button>`;
   } else {
-    const l=cur.lg, r=cur.room, mine=l.owner===ME, mant=l.roles==='mantra';
+    const l=cur.lg, r=cur.room, mine=l.owner===ME||!!cur.me.is_admin, mant=l.roles==='mantra';
     let kp, act;
     if(!r){
       kp=[[cur.members,'Membri'],[mant?'Mantra':'Classic','Ruoli'],[l.code,'Codice'],['Da fare','Asta']];
       act = mine ? `<button class="btn wide" id="dstart">Avvia l\u2019asta</button>`
-        : `<p class="note" style="margin:0">L\u2019asta non \u00e8 ancora stata avviata: la avvia chi ha creato la lega.</p>`;
+        : `<p class="note" style="margin:0">L\u2019asta non \u00e8 ancora stata avviata: la avvia un admin della lega.</p>`;
     } else {
       const done=r.status==='done', left=cur.seat?cur.seat.credits:null;
       kp=[[cur.members,'Membri'],[left!=null?left:'\u2014','Crediti'],[left!=null?r.credits-left:'\u2014','Spesi'],[r.days||'\u2014','Giornate']];
@@ -727,7 +832,7 @@ async function showHome(){
       else act=`<button class="btn wide" id="dlu">Inserisci formazione</button>`;
     }
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
-      <div class="ttl"><b>${l.name}</b><span class="dim">${mine?'Amministratore':'Membro'}</span></div>
+      <div class="ttl"><b>${l.name}</b><span class="dim">${l.owner===ME?'Superadmin':mine?'Admin':'Membro'}</span></div>
       <button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button><button class="ibtn" id="dchat" aria-label="Chat">${IC.chat}</button></div>
     <button class="lsel" id="lsel"><span>${l.name}</span>${IC.chev}</button>
     <section class="stage" aria-label="La mia squadra">
