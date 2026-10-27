@@ -210,6 +210,8 @@ button:focus-visible{outline:2px solid var(--chip);outline-offset:2px}
 .stage::before{content:"";position:absolute;inset:0;background:repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 46px,transparent 46px 92px)}
 .stage>*{position:relative}
 .tname{font-size:30px;font-weight:600;line-height:1.1;padding:0 76px}
+.stcrest{margin:10px auto 14px;display:block;filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
+.stcrest svg{display:block;margin:0 auto}
 .jersey{width:210px;height:210px;margin:8px auto 0;display:block;filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
 .sbtns{position:absolute!important;right:16px;top:14px;display:grid;gap:12px}
 .sbtns button{width:48px;height:48px;border-radius:50%;background:#fff;color:#12793b;display:grid;place-items:center}
@@ -570,6 +572,16 @@ async function fetchLeagues(){
   }catch(e){}
 }
 const JERSEY = '<svg class="jersey" viewBox="0 0 200 200" aria-hidden="true"><defs><clipPath id="jc"><path d="M62 22L86 12Q100 30 114 12L138 22L182 54L160 88L140 72V182H60V72L40 88L18 54Z"/></clipPath></defs><g clip-path="url(#jc)"><rect width="200" height="200" fill="#f4f7f2"/>'+[36,66,96,126,156].map(y=>`<rect x="0" y="${y}" width="200" height="12" fill="#2f9e4f"/>`).join('')+'<rect x="0" y="40" width="40" height="60" fill="#2f9e4f" opacity=".0"/><path d="M18 54L40 88L58 78L36 44Z" fill="#2f9e4f"/><path d="M182 54L160 88L142 78L164 44Z" fill="#2f9e4f"/></g><path d="M86 12Q100 34 114 12" fill="none" stroke="#2f9e4f" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="112" r="15" fill="#fff" stroke="#1a6b38" stroke-width="2"/><path d="M100 103l7 5-2.6 8h-8.8l-2.6-8z" fill="#111"/></svg>';
+function stageHTML(cur){
+  const e=cur?embOf({emblem:cur.me&&cur.me.emblem,id:(cur.me&&cur.me.user_id)||cur.lg.id}):[3,0];
+  const st=[['\u2014','Posizione'],[0,'Punti'],[0,'Partite'],[0,'Pt. Totali']];
+  return `<section class="stage" aria-label="La mia squadra">
+      <div class="tname">${teamName(cur)}</div><div class="stcrest">${crestSVG(e[0],e[1],150)}</div>
+      ${cur?`<div class="sbtns"><button id="dshare" aria-label="Invita gli amici">${IC.share}</button><button id="dset" aria-label="Impostazioni">${IC.gear}</button></div>`:''}
+      <div class="wm">FANTA<b>MANIAC</b></div>
+    </section>
+    <div class="kpis">${st.map(k=>`<div><b>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>`;
+}
 function teamName(cur){ return (cur&&cur.me&&cur.me.team_name) || (STORE.name ? STORE.name+' FC' : 'La mia squadra'); }
 async function leagueInvite(l){
   const url=location.origin+location.pathname+'?l='+l.code, text=`Entra nella mia lega "${l.name}" su FantaManiac! Codice lega: ${l.code}`;
@@ -883,7 +895,9 @@ async function showHome(){
   if(!cur){
     body=`<div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button>
       <div class="ttl"><b>Home</b><span class="dim">Dashboard</span></div>${walletPill()}</div>
-      <div class="empty-state" style="margin-top:18px">${IC.league}<h2>Non hai ancora una lega</h2><p class="dim">Con gli amici: crea una lega privata e fai l\u2019asta quando volete. Con tutti: siediti a un tavolo pubblico, come al poker.</p>
+      <button class="lsel" id="lsel0"><span>Nessuna lega</span>${IC.chev}</button>
+      ${stageHTML(null)}
+      <div class="empty-state" style="margin-top:18px"><h2>Non hai ancora una lega</h2><p class="dim">Con gli amici: crea una lega privata e fai l\u2019asta quando volete. Con tutti: siediti a un tavolo pubblico, come al poker.</p>
         <button class="btn wide" id="newlg" style="margin-top:16px">Crea o unisciti a una lega</button></div>
       ${resumeHTML()}
       <div class="sec-row"><h2>Tavoli aperti ora</h2><button class="rules-toggle" id="dall">Vedi tutti</button></div>
@@ -908,13 +922,9 @@ async function showHome(){
       <div class="ttl"><b>${l.name}</b><span class="dim">${l.owner===ME?'Superadmin':mine?'Admin':'Membro'}</span></div>
       ${walletPill()}<button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button></div>
     <button class="lsel" id="lsel"><span>${l.name}</span>${IC.chev}</button>
-    <section class="stage" aria-label="La mia squadra">
-      <div class="tname">${tn}</div>${JERSEY}
-      <div class="sbtns"><button id="dshare" aria-label="Invita gli amici">${IC.share}</button><button id="dset" aria-label="Impostazioni">${IC.gear}</button></div>
-      <div class="wm">FANTA<b>MANIAC</b></div>
-    </section>
-    <div class="kpis">${kp.map(k=>`<div><b${String(k[0]).length>5?' style="font-size:22px;padding-top:6px"':''}>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>
+    ${stageHTML(cur)}
     <div style="margin-top:14px">${act}</div>
+    <div class="kpis" style="margin-top:14px">${kp.map(k=>`<div><b${String(k[0]).length>5?' style="font-size:22px;padding-top:6px"':''}>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>
     ${r&&r.status!=='done'&&cur.seat?'':resumeHTML()}${hotHTML}
     <p class="note">Invita gli amici con il pulsante di condivisione: il codice della lega \u00e8 <b>${l.code}</b>. Punteggi e classifica arrivano quando colleghiamo i voti della Serie A.</p>`;
   }
@@ -929,6 +939,7 @@ async function showHome(){
   if(g('dset')) g('dset').onclick=()=>showLeagueProfile(cur.lg.id);
   if(g('go')) g('go').onclick=showAste;
   if(g('newlg')) g('newlg').onclick=openLeagueSheet;
+  if(g('lsel0')) g('lsel0').onclick=openLeagueSheet;
   if(g('dstart')) g('dstart').onclick=()=>openStartAuction(cur.lg);
   if(g('dgo')) g('dgo').onclick=()=>enterRoom(cur.room.id);
   if(g('djoin')) g('djoin').onclick=()=>joinTable(cur.room);
