@@ -451,12 +451,12 @@ function openNameSheet(){
   inp.onkeydown=e=>{ if(e.key==='Enter') save(); };
 }
 function openMenu(){
-  const items=[['home','Home','home'],['aste','Le aste','gavel'],['how','Come funziona','gavel'],['rose','Le mie rose','league'],['friends','Amici','user'],['rank','Classifica','cup'],['prof','Profilo','user']];
+  const items=[['home','Home','home'],['aste','Sit&Go','gavel'],['classic','Asta Classica','league'],['how','Come funziona','gavel'],['rose','Le mie rose','league'],['friends','Amici','user'],['rank','Classifica','cup'],['prof','Profilo','user']];
   openSheet(`<h2>Menu</h2><div class="menu">${items.map(([k,l,ic])=>`<button data-go="${k}">${IC[ic]}${l}</button>`).join('')}</div>
     <div style="display:flex;align-items:center;gap:12px;margin-top:16px">${logoSVG(52)}<div><div class="disp" style="font-size:24px;font-style:italic">Fanta<span style="color:var(--chip)">Maniac</span></div><div class="dim" style="font-size:13px">Versione di prova: calciatori inventati, ingresso gratis con crediti virtuali.</div></div></div>`);
   document.querySelectorAll('#sheet [data-go]').forEach(b=>b.onclick=()=>{ closeSheet(); goTo(b.dataset.go); });
 }
-function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends})[k](); }
+function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends,classic:()=>showLobby('classic')})[k](); }
 
 /* ---------- ICONE ---------- */
 const IC = {
@@ -493,7 +493,7 @@ function setNav(show, active='home'){
   const nav=document.getElementById('nav');
   nav.hidden=!show;
   if(!show) return;
-  const items=[['home','Home','home'],['aste','Aste','gavel'],['rose','Rose','league'],['rank','Classifica','cup'],['prof','Profilo','user']];
+  const items=[['home','Home','home'],['aste','Sit&Go','gavel'],['rose','Rose','league'],['rank','Classifica','cup'],['prof','Profilo','user']];
   nav.querySelector('.in').innerHTML=items.map(([k,l,ic])=>`<button data-nav="${k}" class="${k===active?'on':''}">${IC[ic]}<span>${l}</span></button>`).join('');
   nav.querySelectorAll('[data-nav]').forEach(b=>b.onclick=()=>goTo(b.dataset.nav));
 }
@@ -503,7 +503,7 @@ function toast(msg){
   clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('show'),1800);
 }
 function chipsHTML(active){
-  const list=[{id:'home',name:'Tutte',ic:'pitch'}, ...MODES];
+  const list=[{id:'home',name:'Tutte',ic:'pitch'}, ...MODES.filter(m=>m.key!=='classic')];
   return `<div class="chips" role="tablist">${list.map(m=>`<button class="mchip ${m.id===active?'on':''}" data-mode="${m.id}" role="tab" aria-selected="${m.id===active}">${IC[m.ic]}<span>${m.name}</span></button>`).join('')}</div>`;
 }
 function bindChips(){
@@ -525,7 +525,7 @@ const HERO_ART = '<svg width="128" height="128" viewBox="0 0 128 128" aria-hidde
 async function showAste(){
   stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'aste');
   await fetchOpenRooms();
-  const hot = TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
+  const hot = TABLES.filter(t=>t.mode!=='classic'&&t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   $app.innerHTML = `
     ${headerHTML()}
 
@@ -536,13 +536,16 @@ async function showAste(){
       <svg class="ic" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="25" fill="#f0b429" stroke="#fff" stroke-width="2"/><circle cx="27" cy="27" r="14" fill="#fff"/><path d="M27 19l6 4.3-2.3 6.8h-7.4l-2.3-6.8z" fill="#111"/></svg>
       <div class="t"><b>${modeName(hot.mode)} \u00b7 ${hot.call==='random'?'Random':'A chiamata'}</b><span>${hot.seats} persone. ${hot.seats-hot.filled===1?'Manca 1 giocatore':`Mancano ${hot.seats-hot.filled} giocatori`} per partire</span></div>
       <button class="btn" id="hotjoin">Siediti</button></div>`:''}
-    <h2 class="sec">Scegli come giocare</h2>
-    <div class="mgrid">${MODES.map(m=>{
+    <h2 class="sec">Sit &amp; Go: tavoli pubblici</h2>
+    <p class="dim" style="margin:-6px 0 10px">Come al poker: scegli buy-in e posti, ti siedi e l\u2019asta parte quando il tavolo \u00e8 pieno. Vale per una giornata di Serie A.</p>
+    <div class="mgrid">${MODES.filter(m=>m.key!=='classic').map(m=>{
       const n = m.ready ? TABLES.filter(t=>t.mode===m.key&&t.filled<t.seats).length : 0;
       return `<button class="mcard" data-mode="${m.id}">
       <div class="top ${m.g}">${m.novita?'<span class="newb">Novit\u00e0</span>':''}${IC[m.ic]}</div>
       <div class="bd"><b>${m.name}</b><span class="ds">${m.desc}</span>
-        <span class="pill ${m.ready?'':'soon'}">${m.ready?n+' tavoli aperti':'In arrivo'}</span></div></button>`;}).join('')}</div>`;
+        <span class="pill ${m.ready?'':'soon'}">${m.ready?n+' tavoli aperti':'In arrivo'}</span></div></button>`;}).join('')}</div>
+    <div class="strip" style="margin-top:16px"><div class="t"><b>Asta Classica</b><span>L\u2019asta di stagione con la tua lega, regole del fantacalcio standard. Non \u00e8 un Sit &amp; Go.</span></div><button class="btn" id="goclassic">Apri</button></div>`;
+  document.getElementById('goclassic').onclick=()=>showLobby('classic');
   bindHeader(); bindChips(); bindCodeCard(); bindResume();
   const hj=document.getElementById('hotjoin'); if(hj) hj.onclick=()=>joinTable(hot);
 }
@@ -872,7 +875,7 @@ async function showHome(){
   await Promise.all([fetchOpenRooms(), fetchLeagues()]);
   const cur = LEAGUES.find(l=>l.lg.id===STORE.leagueId) || LEAGUES[0];
   const tn=teamName(cur);
-  const hot = TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
+  const hot = TABLES.filter(t=>t.mode!=='classic'&&t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   const hotHTML = hot?`<div class="sec-row"><h2>Prossima asta</h2><button class="rules-toggle" id="dall">Vedi le aste</button></div>
     <div class="strip"><div class="t"><b>${modeName(hot.mode)} \u00b7 ${CALL_LABEL[hot.call]||''}</b><span>${hot.seats} persone. ${hot.seats-hot.filled===1?'Manca 1 giocatore':`Mancano ${hot.seats-hot.filled} giocatori`} per partire</span></div><button class="btn" id="hotjoin">Siediti</button></div>`:'';
   const openTables=TABLES.filter(t=>t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats)).slice(0,5);
@@ -1093,8 +1096,8 @@ async function showLobby(mode){
     <button class="btn wide ghost" id="quick" style="margin-bottom:12px">Siediti a un tavolo aperto</button>
     <div class="filters">
       <div class="frow"><span class="lbl">Tipo</span><button class="chip ${L.call==='all'?'on':''}" data-fc="all">Tutti</button><button class="chip ${L.call==='random'?'on':''}" data-fc="random">Random</button><button class="chip ${L.call==='chiamata'?'on':''}" data-fc="chiamata">A chiamata</button><button class="chip ${L.call==='draft'?'on':''}" data-fc="draft">Draft</button></div>
-      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Buy-in</span><button class="chip ${L.buyin==='all'?'on':''}" data-fb="all">Tutti</button>${BUYINS.map(b=>`<button class="chip ${L.buyin===b?'on':''}" data-fb="${b}">${eurS(b)}</button>`).join('')}</div>
-      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Posti</span><button class="chip ${L.seats==='all'?'on':''}" data-fs="all">Tutti</button>${(RULES[curMode].opts||[2,4,6,8,10,12,14,16,18,20]).map(n=>`<button class="chip ${L.seats===n?'on':''}" data-fs="${n}">${n}</button>`).join('')}</div>
+      ${curMode==='classic'?'':`<div class="frow" style="flex-wrap:wrap"><span class="lbl">Buy-in</span><button class="chip ${L.buyin==='all'?'on':''}" data-fb="all">Tutti</button>${BUYINS.map(b=>`<button class="chip ${L.buyin===b?'on':''}" data-fb="${b}">${eurS(b)}</button>`).join('')}</div>
+      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Posti</span><button class="chip ${L.seats==='all'?'on':''}" data-fs="all">Tutti</button>${(RULES[curMode].opts||[2,4,6,8,10,12,14,16,18,20]).map(n=>`<button class="chip ${L.seats===n?'on':''}" data-fs="${n}">${n}</button>`).join('')}</div>`}
       <div class="frow"><span class="lbl">Mostra</span><button class="chip ${L.hideFull?'on':''}" data-hide>Solo tavoli con posti liberi</button></div>
     </div>
     <div class="ttable" id="ttable"><div class="empty-l">Carico i tavoli…</div></div>
