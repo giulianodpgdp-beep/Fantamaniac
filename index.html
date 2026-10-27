@@ -220,8 +220,15 @@ button:focus-visible{outline:2px solid var(--chip);outline-offset:2px}
 .sgtheme{--chip:#e8b04a;background:linear-gradient(180deg,#1b1408,#0b0b0b 420px);margin:-8px -16px 0;padding:8px 16px 20px;min-height:calc(100vh/.86 - 90px)}
 .sgtheme .seg{background:#000}.sgtheme .kpis,.sgtheme .strip{background:#15110a}
 .sgtheme .btn{background:#e8b04a;color:#1b1408}.sgtheme .btn.ghost{background:transparent;color:#e8b04a;border:1.5px solid #e8b04a}
-.sgstage{text-align:center;padding:20px 8px;margin-top:8px;border-radius:22px;border:2px solid #b8791a;background:radial-gradient(120% 90% at 50% 0,#3a2a0c,#120d05)}
-.sgbal{font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:700;color:#ffd776;line-height:1.1}
+.sgstage{text-align:center;padding:20px 8px;margin-top:8px;border-radius:22px;border:1.5px solid var(--line);background:rgba(6,28,15,.82)}
+.sgbal{font-family:'Barlow Condensed',sans-serif;font-size:56px;font-weight:700;color:var(--chip);line-height:1.1}
+.bracket{display:flex;gap:12px;overflow-x:auto;padding-bottom:10px}
+.bcol{min-width:170px;display:flex;flex-direction:column;justify-content:space-around;gap:10px}
+.bcol h4{font-size:15px;color:var(--chalk-dim);margin:0 0 4px;font-family:'Barlow',sans-serif;font-weight:600}
+.bmatch{background:rgba(6,28,15,.85);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.bm{padding:8px 10px;font-size:14px;border-top:1px solid var(--line)}.bm:first-child{border-top:0}
+.bm i{font-style:normal;color:var(--chalk-dim);font-size:12px;margin-right:6px}
+.bm.me{background:rgba(143,224,79,.18);font-weight:600}.bm.tbd{color:var(--chalk-dim);font-style:italic}
 .stcrest{margin:10px auto 14px;display:block;filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
 .stcrest svg{display:block;margin:0 auto}
 .jersey{width:210px;height:210px;margin:8px auto 0;display:block;filter:drop-shadow(0 10px 14px rgba(0,0,0,.35))}
@@ -596,6 +603,24 @@ async function fetchLeagues(){
   }catch(e){}
 }
 const JERSEY = '<svg class="jersey" viewBox="0 0 200 200" aria-hidden="true"><defs><clipPath id="jc"><path d="M62 22L86 12Q100 30 114 12L138 22L182 54L160 88L140 72V182H60V72L40 88L18 54Z"/></clipPath></defs><g clip-path="url(#jc)"><rect width="200" height="200" fill="#f4f7f2"/>'+[36,66,96,126,156].map(y=>`<rect x="0" y="${y}" width="200" height="12" fill="#2f9e4f"/>`).join('')+'<rect x="0" y="40" width="40" height="60" fill="#2f9e4f" opacity=".0"/><path d="M18 54L40 88L58 78L36 44Z" fill="#2f9e4f"/><path d="M182 54L160 88L142 78L164 44Z" fill="#2f9e4f"/></g><path d="M86 12Q100 34 114 12" fill="none" stroke="#2f9e4f" stroke-width="7" stroke-linecap="round"/><circle cx="100" cy="112" r="15" fill="#fff" stroke="#1a6b38" stroke-width="2"/><path d="M100 103l7 5-2.6 8h-8.8l-2.6-8z" fill="#111"/></svg>';
+function leagueInfoHTML(cur,pool,mds){
+  const l=cur.lg, r=cur.room, today=new Date().toISOString().slice(0,10), nx=(mds||[]).find(m=>m.day>today), pv=(mds||[]).filter(m=>m.day<=today).pop();
+  const fmt=d=>new Date(d).toLocaleDateString('it-IT',{weekday:'long',day:'numeric',month:'long'});
+  const last=`<div class="sec-row"><h2>Ultima giornata</h2></div>
+    <div class="match"><div style="grid-column:1/-1;text-align:center"><b style="font-size:20px">${pv?pv.n+'\u00aa di Serie A':'Si parte presto'}</b>
+      <p class="dim" style="margin-top:6px">${pv?'Il tuo scontro con punteggi e voti arriver\u00e0 quando colleghiamo i voti della Serie A.':'Nessuna giornata giocata in questa lega.'}</p></div></div>
+    ${nx?`<div class="strip" style="margin-top:8px"><div class="t"><b>Prossima: ${nx.n}\u00aa giornata</b><span>${fmt(nx.day)}</span></div></div>`:''}`;
+  let team='';
+  if(pool.length){
+    const spent=pool.reduce((a,p)=>a+(p.price||0),0), top=[...pool].sort((a,b)=>(b.price||0)-(a.price||0))[0];
+    const by=['P','D','C','A'].map(k=>[k,pool.filter(p=>p.role===k).length]).filter(x=>x[1]);
+    team=`<div class="sec-row"><h2>La mia squadra</h2></div>
+      <div class="kpis"><div><b>${pool.length}</b><span>Calciatori</span></div><div><b>${spent}</b><span>Crediti spesi</span></div><div><b style="font-size:22px;padding-top:6px">${top.price||0}</b><span>${escH(top.name.split(' ').slice(-1)[0])}</span></div><div><b style="font-size:22px;padding-top:6px">${by.map(x=>x[1]).join('-')}</b><span>${by.map(x=>x[0]).join('-')}</span></div></div>`;
+  } else if(r&&r.status==='done') team=`<div class="sec-row"><h2>La mia squadra</h2></div><p class="dim">Non hai una rosa in questa lega.</p>`;
+  const info=`<div class="sec-row"><h2>Info lega</h2></div>
+    <div class="rcard"><div class="rrow"><span>Nome</span><span class="p">${escH(l.name)}</span></div><div class="rrow"><span>Ruoli</span><span class="p">${l.roles==='mantra'?'Mantra':'Classic'}</span></div><div class="rrow"><span>Membri</span><span class="p">${cur.members}</span></div><div class="rrow"><span>Asta</span><span class="p">${!r?'Da fare':r.status==='done'?modeName(r.mode)+' \u00b7 conclusa':'In corso'}</span></div><div class="rrow"><span>Codice</span><span class="p">${l.code}</span></div>${l.founded?`<div class="rrow"><span>Fondata</span><span class="p">${escH(l.founded)}</span></div>`:''}</div>`;
+  return last+team+info;
+}
 function stageHTML(cur){
   const e=cur?embOf({emblem:cur.me&&cur.me.emblem,id:(cur.me&&cur.me.user_id)||cur.lg.id}):[3,0];
   const st=[['\u2014','Posizione'],[0,'Punti'],[0,'Partite'],[0,'Pt. Totali']];
@@ -907,18 +932,83 @@ function openStartAuction(lg){
   });
 }
 const segHTML=a=>`<div class="seg"><button class="${a==='leghe'?'on':''}" data-seg="leghe">Leghe</button><button class="${a==='sg'?'on':''}" data-seg="sg">Sit &amp; Go</button><button class="${a==='tornei'?'on':''}" data-seg="tornei">Tornei</button></div>`;
+const TF={format:'all',size:'all',buyin:'all',max:30};
+const TN_FMT={scorpione:'Scorpion',listone:'Listone'};
+const TN_ROUND=(n)=>n===1?'Finale':n===2?'Semifinali':n===4?'Quarti':n===8?'Ottavi':n===16?'Sedicesimi':'Trentaduesimi';
+const payPct=n=>n<=5?[100]:n<=8?[65,35]:n<=14?[50,30,20]:n<=20?[40,30,20,10]:n<=30?[37,27,18,10,8]:(()=>{const k=Math.round(n*0.185),t=k*(k+1)/2,r=[];let sm=0;for(let i=1;i<=k;i++){const v=Math.round((k+1-i)/t*100);r.push(v);sm+=v;}r[0]+=100-sm;return r;})();
+const dtS=d=>new Date(d).toLocaleDateString('it-IT',{weekday:'short',day:'numeric',month:'short'});
 async function showTornei(){
+  stopTick(); stopLobby(); G=null; setNav(true,'home');
   await fetchWallet();
+  try{ await sb.rpc('ensure_tournaments'); }catch(e){}
+  let list=[], mine=[];
+  try{
+    let q=sb.from('tournaments').select('*').eq('status','open');
+    if(TF.format!=='all') q=q.eq('format',TF.format);
+    if(TF.size!=='all') q=q.eq('size',TF.size);
+    if(TF.buyin!=='all') q=q.eq('buyin_cents',TF.buyin);
+    const {data}=await q.order('filled',{ascending:false}).order('size').order('buyin_cents').limit(TF.max+1); list=data||[];
+    const {data:en}=await sb.from('tournament_entries').select('tournament_id').eq('user_id',ME).eq('active',true);
+    const ids=(en||[]).map(x=>x.tournament_id);
+    if(ids.length){ const {data:mt}=await sb.from('tournaments').select('*').in('id',ids).order('created_at',{ascending:false}); mine=mt||[]; }
+  }catch(e){}
+  const mineIds=new Set(mine.map(t=>t.id));
+  const st=t=>t.status==='open'?`Iscrizioni fino a ${dtS(t.deadline)}`:t.status==='roster'?'Composizione rose':t.status==='running'?'In corso':'Concluso';
+  const chip=(k,v,l)=>`<button class="chip ${TF[k]===v?'on':''}" data-tf="${k}:${v}">${l}</button>`;
   $app.innerHTML=`${segHTML('tornei')}
     <div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button><div class="ttl"><b>Tornei</b><span class="dim">A eliminazione diretta</span></div>${walletPill()}</div>
-    <section class="sgstage" style="border-color:#5b8def;background:radial-gradient(120% 90% at 50% 0,#17306a,#0a1226)"><span class="dim">Tabellone fino a 64 partecipanti</span><div class="sgbal" style="color:#bcd2ff;font-size:44px">In arrivo</div><span class="dim">Un turno per ogni giornata di Serie A</span></section>
-    <div class="sec-row"><h2>Come funzioneranno</h2></div>
-    <div class="gloss"><b>Formati</b><span>Scorpion e Listone, con iscrizione e buy-in in \u20ac virtuali, legati al tuo account.</span></div>
-    <div class="gloss"><b>Turni</b><span>4 persone fanno 2 giornate, 8 ne fanno 3, 16 ne fanno 4, fino a 6 turni con 64 persone.</span></div>
-    <div class="gloss"><b>Scontri</b><span>Ogni turno \u00e8 uno scontro diretto: passa chi fa pi\u00f9 punti. La rosa \u00e8 la stessa per tutto il torneo.</span></div>
-    <div class="gloss"><b>Iscrizione</b><span>Hai tempo fino a una scadenza per iscriverti e, nel Listone, comporre la rosa. Poi si sorteggia il tabellone.</span></div>
-    <p class="note">Lo stiamo costruendo: prima servono i voti della Serie A per decidere chi passa il turno.</p>`;
-  bindSeg(); document.getElementById('dmenu').onclick=openMenu; const w=document.getElementById('wal'); if(w) w.onclick=openWallet;
+    ${mine.length?`<div class="sec-row"><h2>I miei tornei</h2></div>${mine.map(t=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${TN_FMT[t.format]} \u00b7 ${t.size} \u00b7 ${eurS(t.buyin_cents)}</b><span>${t.filled}/${t.size} iscritti \u00b7 ${st(t)}</span></div><button class="btn" data-tb="${t.id}">Tabellone</button></div>`).join('')}`:''}
+    <div class="sec-row"><h2>Iscriviti</h2></div>
+    <div class="filters">
+      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Formato</span>${chip('format','all','Tutti')}${chip('format','scorpione','Scorpion')}${chip('format','listone','Listone')}</div>
+      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Partecipanti</span>${chip('size','all','Tutti')}${[4,8,16,32,64].map(n=>chip('size',n,n)).join('')}</div>
+      <div class="frow" style="flex-wrap:wrap"><span class="lbl">Buy-in</span>${chip('buyin','all','Tutti')}${BUYINS.filter(b=>b).map(b=>chip('buyin',b,eurS(b))).join('')}</div>
+    </div>
+    ${list.slice(0,TF.max).map(t=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${TN_FMT[t.format]} \u00b7 ${t.size} persone \u00b7 ${eurS(t.buyin_cents)}</b><span>${t.filled}/${t.size} iscritti \u00b7 ${t.rounds} turni \u00b7 ${dtS(t.deadline)}</span></div><button class="btn" data-ti="${t.id}">${mineIds.has(t.id)?'Aperto':'Dettagli'}</button></div>`).join('')||'<p class="dim">Nessun torneo con questi filtri.</p>'}
+    ${list.length>TF.max?'<button class="btn wide ghost" id="tmore" style="margin:10px 0">Mostra altri</button>':''}
+    <p class="note">Ogni turno \u00e8 una giornata di Serie A: chi fa pi\u00f9 punti passa. La fase delle rose (Scorpion a gruppi, Listone con budget) e i punteggi partono quando colleghiamo i voti.</p>`;
+  bindSeg(); const g=x=>document.getElementById(x);
+  g('dmenu').onclick=openMenu; if(g('wal')) g('wal').onclick=openWallet;
+  $app.querySelectorAll('[data-tf]').forEach(b=>b.onclick=()=>{ const [k,v]=b.dataset.tf.split(':'); TF[k]=(v==='all')?'all':(k==='format'?v:+v); TF.max=30; showTornei(); });
+  if(g('tmore')) g('tmore').onclick=()=>{ TF.max+=30; showTornei(); };
+  $app.querySelectorAll('[data-tb]').forEach(b=>b.onclick=()=>showBracket(b.dataset.tb));
+  $app.querySelectorAll('[data-ti]').forEach(b=>b.onclick=()=>openTournament(list.find(t=>t.id===b.dataset.ti),mineIds.has(b.dataset.ti)));
+}
+function openTournament(t,joined){
+  const pool=Math.floor(t.buyin_cents*t.size*.9), pc=payPct(t.size);
+  openSheet(`<h2>${TN_FMT[t.format]} \u00b7 ${t.size} persone</h2>
+    <div class="facts"><div class="fact"><b>${eurS(t.buyin_cents)}</b><span>buy-in</span></div><div class="fact"><b>${t.buyin_cents?eurS(pool):'\\u2014'}</b><span>montepremi</span></div><div class="fact"><b>${t.filled}/${t.size}</b><span>iscritti</span></div></div>
+    <ul class="rules"><li>${t.rounds} turni a eliminazione diretta, uno per giornata di Serie A, a partire dalla ${t.md_start}\u00aa giornata</li>
+      <li>Iscrizioni fino a ${dtS(t.deadline)}. Se non si arriva a ${t.size}, parte con chi c\\u2019\u00e8 (da 2 persone) e chi non ha avversario passa il turno</li>
+      <li>${t.format==='scorpion'||t.format==='scorpione'?'Rose di 3 calciatori scelti in aste Scorpion a gruppi':'Rosa costruita dal listone con un budget uguale per tutti'}: la stessa per tutto il torneo</li>
+      <li>Vince lo scontro chi fa pi\u00f9 punti; a parit\u00e0 passa chi ha pi\u00f9 punti totali</li>
+      ${t.buyin_cents?`<li>Premi ai primi ${pc.length} (${pc.join('% / ')}%), commissione 10%</li>`:''}
+      <li>Se ti ritiri prima della partenza, il buy-in ti torna</li></ul>
+    ${joined?`<button class="btn wide ghost" id="tn-leave">Ritirati e riprendi il buy-in</button>`:t.filled>=t.size?'<p class="note">Torneo al completo.</p>':`<button class="btn wide" id="tn-join">Iscriviti${t.buyin_cents?' \u00b7 '+eur(t.buyin_cents):''}</button>`}
+    <button class="btn wide ghost" data-close style="margin-top:8px">Chiudi</button>`);
+  document.querySelector('#sheet .btn[data-close]').onclick=closeSheet;
+  const j=document.getElementById('tn-join'), lv=document.getElementById('tn-leave');
+  if(j) j.onclick=async()=>{ if(!(await ensureName())) return; j.disabled=true; try{ await rpc('join_tournament',{p_id:t.id}); closeSheet(); toast('Iscritto'); showTornei(); }catch(e){ toast(errMsg(e)); j.disabled=false; } };
+  if(lv) lv.onclick=async()=>{ try{ await rpc('leave_tournament',{p_id:t.id}); closeSheet(); toast('Iscrizione annullata'); showTornei(); }catch(e){ toast(errMsg(e)); } };
+}
+async function showBracket(id){
+  stopTick(); stopLobby(); G=null; setNav(false);
+  let t=null, ents=[];
+  try{ const {data}=await sb.from('tournaments').select('*').eq('id',id).single(); t=data; const {data:e}=await sb.from('tournament_entries').select('user_id,name,seed').eq('tournament_id',id).eq('active',true).order('joined_at'); ents=e||[]; }catch(e){}
+  if(!t){ toast('Torneo non trovato'); return showTornei(); }
+  const rounds=(t.bracket&&t.bracket.rounds)||null;
+  let body;
+  if(!rounds){
+    body=`<p class="dim" style="margin:12px 0">Il tabellone viene sorteggiato alla chiusura delle iscrizioni (${dtS(t.deadline)}) o quando il torneo \u00e8 al completo.</p>
+      <div class="sec-row"><h2>Iscritti (${ents.length}/${t.size})</h2></div>${ents.map(x=>`<div class="rrow"><span>${escH(x.name||'Giocatore')}${x.user_id===ME?' <small class="dim">\u00b7 tu</small>':''}</span></div>`).join('')||'<p class="dim">Nessuno ancora.</p>'}`;
+  } else {
+    const nm=(m,s)=>m[s]?`<div class="bm ${m[s]===ME?'me':''}"><i>${m['s'+s]||''}</i>${escH(m[s+'n']||'')}</div>`:`<div class="bm tbd">${m.bye&&s==='b'?'bye':'da definire'}</div>`;
+    body=`<p class="dim" style="margin:12px 0">Torneo ${TN_FMT[t.format]} \u00b7 ${t.size} \u00b7 inizia dalla ${t.md_start}\u00aa giornata. Fase attuale: ${t.status==='roster'?'composizione delle rose':t.status==='running'?'in corso':'concluso'}.</p>
+      <div class="bracket">${rounds.map((rd,ri)=>`<div class="bcol"><h4>${TN_ROUND(rd.length)}</h4>${rd.map(m=>`<div class="bmatch">${ri===0?nm(m,'a')+nm(m,'b'):'<div class="bm tbd">da definire</div><div class="bm tbd">da definire</div>'}</div>`).join('')}</div>`).join('')}</div>
+      <p class="note">${ents.length} giocatori. Dalla seconda fase i nomi compaiono man mano che gli scontri si chiudono.</p>`;
+  }
+  $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">Tabellone</h1><span style="width:34px"></span></div>${body}`;
+  document.getElementById('tb-back').onclick=()=>{ STORE.homeTab='tornei'; showHome(); };
 }
 function showGioca(){
   stopTick(); stopLobby(); G=null; setNav(true,'gioca');
@@ -954,7 +1044,7 @@ async function showSitGo(){
   const open=TABLES.filter(t=>t.mode!=='classic'&&t.filled<t.max_seats).sort((a,b)=>(b.filled/b.max_seats)-(a.filled/a.max_seats)).slice(0,4);
   const stato=r=>r.status==='open'?`In attesa: ${r.filled}/${r.max_seats}`:r.status==='running'?'Asta in corso':(prize[r.id]?`Premio ${eur(prize[r.id])}`:'Asta conclusa');
   const act=r=>r.status==='done'&&!NOLU(r.mode)?`<button class="btn" data-sl="${r.id}">Formazione</button>`:r.status!=='done'?`<button class="btn" data-sr="${r.id}">Apri</button>`:'';
-  $app.innerHTML=`<div class="sgtheme">${segHTML('sg')}
+  $app.innerHTML=`<div class="sgwrap">${segHTML('sg')}
     <div class="dhead"><button class="burger" id="dmenu" aria-label="Menu">${IC.burger}</button><div class="ttl"><b>Sit &amp; Go</b><span class="dim">Il tuo account, non una lega</span></div><button class="ibtn" id="dbell" aria-label="Notifiche">${IC.bell}</button></div>
     <section class="sgstage"><span class="dim">Saldo \u20ac virtuali</span><div class="sgbal">${eur(WALLET.cents||0)}</div>${nextMd?`<span class="dim">Prossima giornata di Serie A: <b>${nextMd}</b></span>`:''}
       <div style="display:flex;gap:8px;margin-top:14px;justify-content:center"><button class="btn" id="sgq">Siediti subito</button><button class="btn ghost" id="sgw">Portafoglio</button></div>
@@ -981,6 +1071,11 @@ async function showHome(){
   await Promise.all([fetchOpenRooms(), fetchLeagues()]);
   const cur = LEAGUES.find(l=>l.lg.id===STORE.leagueId) || LEAGUES[0];
   const tn=teamName(cur);
+  let myPool=[], mds=[];
+  try{
+    const {data:m}=await sb.from('matchdays').select('n,day').order('n'); mds=m||[];
+    if(cur&&cur.room&&cur.room.status==='done'&&cur.seat){ const {data:pl}=await sb.from('pool').select('name,role,price').eq('room_id',cur.room.id).eq('owner_seat',cur.seat.seat); myPool=pl||[]; }
+  }catch(e){}
   const hot = TABLES.filter(t=>t.mode!=='classic'&&t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   const hotHTML = hot?`<div class="sec-row"><h2>Prossima asta</h2><button class="rules-toggle" id="dall">Vedi le aste</button></div>
     <div class="strip"><div class="t"><b>${modeName(hot.mode)} \u00b7 ${CALL_LABEL[hot.call]||''}</b><span>${hot.seats} persone. ${hot.seats-hot.filled===1?'Manca 1 giocatore':`Mancano ${hot.seats-hot.filled} giocatori`} per partire</span></div><button class="btn" id="hotjoin">Siediti</button></div>`:'';
@@ -993,10 +1088,8 @@ async function showHome(){
       ${stageHTML(null)}
       <div class="empty-state" style="margin-top:18px"><h2>Non hai ancora una lega</h2><p class="dim">Con gli amici: crea una lega privata e fai l\u2019asta quando volete. Con tutti: siediti a un tavolo pubblico, come al poker.</p>
         <button class="btn wide" id="newlg" style="margin-top:16px">Crea o unisciti a una lega</button></div>
-      ${resumeHTML()}
-      <div class="sec-row"><h2>Tavoli aperti ora</h2><button class="rules-toggle" id="dall">Vedi tutti</button></div>
-      ${openTables.length?openTables.map(t=>`<div class="strip" style="margin-top:8px"><div class="t"><b>${modeName(t.mode)} \u00b7 ${CALL_LABEL[t.call]||''} \u00b7 ${t.roles==='mantra'?'Mantra':'Classic'}</b><span>Tavolo ${t.code} di ${t.host_name||'?'} \u00b7 ${t.filled}/${t.seats} posti \u00b7 ${t.credits} cr</span></div><button class="btn" data-tj="${t.id}">Siediti</button></div>`).join(''):`<p class="dim" style="margin:8px 0">Nessun tavolo aperto adesso. Creane uno dalla sezione Aste e invita gli amici.</p>`}
-      <button class="btn wide ghost" id="go" style="margin-top:12px">Vai alle aste</button>`;
+      <div class="sec-row" style="display:none"><h2>x</h2><button class="rules-toggle" id="dall">x</button></div>
+      <p class="note">Per giocare subito, senza una lega, vai nella scheda Sit &amp; Go.</p>`;
   } else {
     const l=cur.lg, r=cur.room, mine=l.owner===ME||!!cur.me.is_admin, mant=l.roles==='mantra';
     let kp, act;
@@ -1020,7 +1113,7 @@ async function showHome(){
     <div style="margin-top:14px">${act}</div>
     <div style="display:flex;gap:8px;margin-top:8px"><button class="btn ghost" id="dcal" style="flex:1">Calendario</button><button class="btn ghost" id="dcls" style="flex:1">Classifica</button></div>
     <div class="kpis" style="margin-top:14px">${kp.map(k=>`<div><b${String(k[0]).length>5?' style="font-size:22px;padding-top:6px"':''}>${k[0]}</b><span>${k[1]}</span></div>`).join('')}</div>
-    ${r&&r.status!=='done'&&cur.seat?'':resumeHTML()}${hotHTML}
+    ${leagueInfoHTML(cur,myPool,mds)}
     <p class="note">Invita gli amici con il pulsante di condivisione: il codice della lega \u00e8 <b>${l.code}</b>. Punteggi e classifica arrivano quando colleghiamo i voti della Serie A.</p>`;
   }
   if(AUTH.anon) body+=`<div class="strip" style="margin-top:14px"><div class="t"><b>Salva il tuo account</b><span>Registrati con email: non perdi pi\u00f9 leghe e crediti.</span></div><button class="btn" id="accbn">Registrati</button></div>`;
