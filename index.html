@@ -480,11 +480,11 @@ function openMenu(){
   const cl=(typeof LEAGUES!=='undefined'&&LEAGUES.length)?(LEAGUES.find(x=>x.lg.id===STORE.leagueId)||LEAGUES[0]):null;
   if(cl){
     const adm=cl.lg.owner===ME||!!cl.me.is_admin;
-    const gi=[['notices','Comunicazioni'],...(adm?[['credits','Crediti'],['rosters','Gestione rose'],['lineups','Gestione formazioni']]:[])];
+    const gi=[['notices','Comunicazioni'],...(adm?[['votes','Voti'],['credits','Crediti'],['rosters','Gestione rose'],['lineups','Gestione formazioni']]:[])];
     const box=document.createElement('div');
     box.innerHTML=`<h3 style="margin:16px 0 6px;font-size:15px" class="dim">${adm?'Gestione':'Lega'} \u00b7 ${cl.lg.name}</h3><div class="menu">${gi.map(([k,l])=>`<button data-lm="${k}">${IC.league}${l}</button>`).join('')}</div>`;
     document.querySelector('#sheet .menu').after(box);
-    box.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{ closeSheet(); ({notices:showNotices,credits:showCredits,rosters:showRosters,lineups:showLineups})[b.dataset.lm](cl.lg.id); });
+    box.querySelectorAll('[data-lm]').forEach(b=>b.onclick=()=>{ closeSheet(); ({notices:showNotices,votes:showVotes,credits:showCredits,rosters:showRosters,lineups:showLineups})[b.dataset.lm](cl.lg.id); });
   }
 }
 function goTo(k){ ({home:showHome,how:showHow,rose:showHistory,rank:showRanking,prof:showProfile,aste:showAste,friends:showFriends,classic:()=>showLobby('classic'),gioca:showGioca,tornei:()=>{STORE.homeTab='tornei';saveStore();showHome();}})[k](); }
@@ -1983,14 +1983,61 @@ async function openWallet(){
 }
 function route_refresh(){ if(document.querySelector('.dhead')) showHome(); }
 
+/* ---------- VOTI (import dall'admin) ---------- */
+function parseVotes(txt){
+  const rows=[];
+  String(txt||'').split(/\r?\n/).forEach(line=>{
+    const l=line.replace(/\t/g,' ').trim(); if(!l) return;
+    const m=l.match(/^([A-Za-z\u00c0-\u017f][A-Za-z\u00c0-\u017f'.\- ]*?)[\s:;,|]+(\d{1,2}(?:[.,]\d)?)(?:[\s:;,|]+([+-]?\d{1,2}(?:[.,]\d)?))?\s*$/);
+    if(!m) return;
+    const name=m[1].trim(), vote=parseFloat(m[2].replace(',','.')); if(!(vote>=0&&vote<=10)) return;
+    rows.push({name,vote,bonus:m[3]?parseFloat(m[3].replace(',','.')):0});
+  });
+  return rows;
+}
+async function showVotes(id){
+  const c=await gestCtx(id); if(!c) return;
+  let mds=[]; try{ const {data}=await sb.from('league_votes').select('md').eq('league_id',id); mds=[...new Set((data||[]).map(x=>x.md))].sort((a,b)=>a-b); }catch(e){}
+  const next=mds.length?mds[mds.length-1]+1:1;
+  $app.innerHTML=`${gestBar('Voti')}
+    <p class="dim" style="margin:10px 0">Incolla i voti della giornata, uno per riga: <b>cognome voto</b> (e, se vuoi, il bonus/malus totale dopo il voto). Per esempio: <i>Lautaro 7,5 3</i>. Dove c\u2019\u00e8 pi\u00f9 di un calciatore con lo stesso cognome, aggiungi la squadra nel nome.</p>
+    <div class="cf"><span class="lbl">Giornata di Serie A</span><input id="vmd" class="inp" type="number" min="1" max="60" value="${next}" style="width:110px"></div>
+    <textarea id="vtx" class="inp" rows="9" style="min-height:190px;padding:12px;margin-top:8px" placeholder="Cognome voto&#10;Sommer 6&#10;Bastoni 6,5 1&#10;..."></textarea>
+    <p class="dim" id="vct" style="margin:6px 0">0 righe riconosciute</p>
+    <button class="btn wide" id="vgo">Importa i voti</button>
+    <div id="vres"></div>
+    ${mds.length?`<div class="sec-row"><h2>Gi\u00e0 importate</h2></div><p class="dim">Giornate con voti: ${mds.join(', ')}. Importare di nuovo la stessa giornata aggiorna i voti.</p>`:''}`;
+  const g=x=>document.getElementById(x);
+  g('tb-back').onclick=showHome;
+  g('vtx').oninput=()=>{ g('vct').textContent=parseVotes(g('vtx').value).length+' righe riconosciute'; };
+  g('vgo').onclick=async()=>{
+    const rows=parseVotes(g('vtx').value), md=+g('vmd').value;
+    if(!rows.length){ toast('Nessun voto riconosciuto'); return; }
+    g('vgo').disabled=true;
+    try{
+      const r=await rpc('import_votes',{p_league:id,p_md:md,p_rows:rows});
+      g('vres').innerHTML=`<div class="rcard" style="margin-top:12px"><h3>Importati ${r.imported} voti</h3>
+        ${r.unmatched&&r.unmatched.length?`<p class="dim" style="margin:6px 0 2px">Non trovati (${r.unmatched.length}):</p><p style="margin:0">${r.unmatched.map(escH).join(', ')}</p>`:''}
+        ${r.ambiguous&&r.ambiguous.length?`<p class="dim" style="margin:6px 0 2px">Pi\u00f9 calciatori con questo nome (aggiungi la squadra):</p><p style="margin:0">${r.ambiguous.map(escH).join(', ')}</p>`:''}</div>`;
+      toast('Voti importati');
+    }catch(e){ toast(errMsg(e)); }
+    g('vgo').disabled=false;
+  };
+}
+
 /* ---------- CLASSIFICA DI LEGA ---------- */
 async function showLeagueTable(id){
   stopTick(); stopLobby(); G=null; setNav(false);
-  let mem=[]; try{ const {data}=await sb.from('league_members').select('user_id,name,team_name,emblem').eq('league_id',id).eq('removed',false).order('joined_at'); mem=data||[]; }catch(e){}
+  let mem=[], pts={}; try{
+    const {data}=await sb.from('league_members').select('user_id,name,team_name,emblem').eq('league_id',id).eq('removed',false).order('joined_at'); mem=data||[];
+    const {data:vm}=await sb.from('league_votes').select('md').eq('league_id',id); const mds=[...new Set((vm||[]).map(x=>x.md))];
+    for(const md of mds){ const r=await rpc('calc_day',{p_league:id,p_md:md}); (r||[]).forEach(x=>pts[x.user_id]=(pts[x.user_id]||0)+Number(x.points)); }
+  }catch(e){}
+  mem.sort((a,b)=>(pts[b.user_id]||0)-(pts[a.user_id]||0));
   $app.innerHTML=`<div class="tb"><button class="back" id="tb-back" aria-label="Indietro">${IC.back}</button><h1 class="tb-t" style="text-align:center">Classifica</h1><span style="width:34px"></span></div>
     <div class="trow h" style="grid-template-columns:30px 1fr 56px;margin-top:12px"><span>#</span><span>Squadra</span><span style="text-align:right">Punti</span></div>
-    ${mem.map((m,i)=>{ const e=embOf({id:m.user_id,emblem:m.emblem}); return `<div class="trow" style="grid-template-columns:30px 1fr 56px"><span class="num" style="text-align:left">${i+1}</span><span class="nm"><span class="pcrest">${crestSVG(e[0],e[1],26)}</span><span class="tt"><span class="t">${escH(m.team_name||((m.name||'Squadra')+' FC'))}</span><small>${escH(m.name||'')}</small></span></span><span class="num">0</span></div>`; }).join('')}
-    <p class="note">La classifica si riempie quando collegheremo i voti della Serie A e partir\u00e0 il campionato di lega.</p>`;
+    ${mem.map((m,i)=>{ const e=embOf({id:m.user_id,emblem:m.emblem}); return `<div class="trow" style="grid-template-columns:30px 1fr 56px"><span class="num" style="text-align:left">${i+1}</span><span class="nm"><span class="pcrest">${crestSVG(e[0],e[1],26)}</span><span class="tt"><span class="t">${escH(m.team_name||((m.name||'Squadra')+' FC'))}</span><small>${escH(m.name||'')}</small></span></span><span class="num">${(pts[m.user_id]||0).toFixed(1).replace('.0','')}</span></div>`; }).join('')}
+    <p class="note">I punti sono la somma dei voti importati dall\u2019admin della lega, con le sostituzioni dalla panchina.</p>`;
   document.getElementById('tb-back').onclick=showHome;
 }
 
