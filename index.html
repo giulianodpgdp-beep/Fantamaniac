@@ -544,6 +544,8 @@ const HERO_ART = '<svg width="128" height="128" viewBox="0 0 128 128" aria-hidde
 async function showAste(){
   stopTick(); stopLobby(); G=null; NEWLG=null; setNav(true,'aste');
   await fetchOpenRooms();
+  const CNT={};
+  try{ await Promise.all(MODES.filter(m=>m.key!=='classic').map(async m=>{ const {count}=await sb.from('rooms').select('id',{count:'exact',head:true}).eq('status','open').eq('is_private',false).eq('mode',m.key).lt('filled',99); CNT[m.key]=count||0; })); }catch(e){}
   const hot = TABLES.filter(t=>t.mode!=='classic'&&t.filled<t.seats).sort((a,b)=>(b.filled/b.seats)-(a.filled/a.seats))[0];
   $app.innerHTML = `
     ${headerHTML()}
@@ -558,7 +560,7 @@ async function showAste(){
     <h2 class="sec">Sit &amp; Go: tavoli pubblici</h2>
     <p class="dim" style="margin:-6px 0 10px">Come al poker: scegli buy-in e posti, ti siedi e l\u2019asta parte quando il tavolo \u00e8 pieno. Vale per una giornata di Serie A.</p>
     <div class="mgrid">${MODES.filter(m=>m.key!=='classic').map(m=>{
-      const n = m.ready ? TABLES.filter(t=>t.mode===m.key&&t.filled<t.seats).length : 0;
+      const n = m.ready ? (CNT[m.key]||0) : 0;
       return `<button class="mcard" data-mode="${m.id}">
       <div class="top ${m.g}">${m.novita?'<span class="newb">Novit\u00e0</span>':''}${IC[m.ic]}</div>
       <div class="bd"><b>${m.name}</b><span class="ds">${m.desc}</span>
@@ -1056,7 +1058,7 @@ async function fetchOpenRooms(){
   if(!sb) return;
   try{
     if(!TPL_OK){ TPL_OK=true; try{ await sb.rpc('ensure_templates'); }catch(e){ TPL_OK=false; } }
-    const {data}=await sb.from('rooms').select('*').eq('status','open').order('created_at',{ascending:false}).limit(1000);
+    const {data}=await sb.from('rooms').select('*').eq('status','open').order('filled',{ascending:false}).order('created_at',{ascending:false}).limit(300);
     ROOMS=data||[];
     const fresh=Date.now()-3*3600*1000;
     TABLES=ROOMS.filter(r=>!r.is_private && (r.is_template || new Date(r.created_at).getTime()>fresh)).map(r=>({...r, seats:r.max_seats, name:'Tavolo '+r.code}));
@@ -1095,7 +1097,7 @@ async function joinByCode(code){
 async function joinTable(t){
   if(!(await ensureName())) return;
   try{ await rpc('join_room',{p_room:t.id}); await enterRoom(t.id); }
-  catch(e){ toast(errMsg(e)); await fetchOpenRooms(); if(document.getElementById('ttable')) renderRows(); }
+  catch(e){ toast(errMsg(e)); await refreshLobby(); if(document.getElementById('ttable')) renderRows(); }
 }
 async function createTable(f){
   if(!(await ensureName())) return false;
@@ -1107,7 +1109,7 @@ async function createTable(f){
 }
 
 /* ---------- LOBBY: TAVOLI PUBBLICI ---------- */
-const L = {sort:'free', dir:1, call:'all', hideFull:true, sel:null, buyin:'all', seats:'all', roles:'all', max:40};
+const L = {sort:'free', dir:1, call:'all', hideFull:true, sel:null, buyin:'all', seats:'all', roles:'all', credits:'all', max:40};
 const BUYINS=[0,10,20,50,100,200,500,1000,2000];
 const eurS=c=>c?eur(c).replace(/,00$/,'').replace('€ ','€'):'Gratis';
 let curMode = 'classic', lobbyT = null, lobbyChan = null, lobbyDeb = null;
@@ -1151,9 +1153,25 @@ function openMode(id){
   const m=MODES.find(x=>x.id===id); if(m) showLobby(m.key);
 }
 
-const curTables = ()=>TABLES.filter(t=>t.mode===curMode&&(L.call==='all'||t.call===L.call)&&(L.buyin==='all'||(t.buyin_cents||0)===L.buyin)&&(L.seats==='all'||t.max_seats===L.seats)&&(L.roles==='all'||t.roles===L.roles));
+let LOBBY=[];
+async function lobbyFetch(){
+  if(!sb||!curMode) return;
+  try{
+    let q=sb.from('rooms').select('*').eq('status','open').eq('is_private',false).eq('mode',curMode);
+    if(L.call!=='all') q=q.eq('call',L.call);
+    if(L.buyin!=='all') q=q.eq('buyin_cents',L.buyin);
+    if(L.seats!=='all') q=q.eq('max_seats',L.seats);
+    if(L.roles!=='all') q=q.eq('roles',L.roles);
+    if(L.credits!=='all') q=q.eq('credits',L.credits);
+    const {data}=await q.order('filled',{ascending:false}).order('buyin_cents',{ascending:true}).limit(L.max+60);
+    LOBBY=(data||[]).map(r=>({...r,seats:r.max_seats,name:'Tavolo '+r.code}));
+  }catch(e){}
+}
+const refreshLobby=async()=>{ await fetchOpenRooms(); await lobbyFetch(); };
+const CRLV={turbo:[300,500,1000],super:[100,300,500],scorpione:[100,300,500],classic:[]};
+const curTables = ()=>LOBBY.filter(t=>t.mode===curMode&&(L.call==='all'||t.call===L.call)&&(L.buyin==='all'||(t.buyin_cents||0)===L.buyin)&&(L.seats==='all'||t.max_seats===L.seats)&&(L.roles==='all'||t.roles===L.roles)&&(L.credits==='all'||t.credits===L.credits));
 async function showLobby(mode){
-  if(typeof mode==='string'){ if(curMode!==mode){ L.call='all'; L.sel=null; L.buyin='all'; L.seats='all'; L.roles='all'; L.max=40; } curMode=mode; }
+  if(typeof mode==='string'){ if(curMode!==mode){ L.call='all'; L.sel=null; L.buyin='all'; L.seats='all'; L.roles='all'; L.credits='all'; L.max=40; } curMode=mode; }
   stopTick(); stopLobby(); setNav(false);
   const modeId=idOfKey(curMode), m=MODES.find(x=>x.id===modeId);
   $app.innerHTML = `
@@ -1166,6 +1184,7 @@ async function showLobby(mode){
       <div class="frow"><span class="lbl">Tipo</span><button class="chip ${L.call==='all'?'on':''}" data-fc="all">Tutti</button><button class="chip ${L.call==='random'?'on':''}" data-fc="random">Random</button><button class="chip ${L.call==='chiamata'?'on':''}" data-fc="chiamata">A chiamata</button><button class="chip ${L.call==='draft'?'on':''}" data-fc="draft">Draft</button></div>
       ${curMode==='classic'?'':`<div class="frow" style="flex-wrap:wrap"><span class="lbl">Buy-in</span><button class="chip ${L.buyin==='all'?'on':''}" data-fb="all">Tutti</button>${BUYINS.map(b=>`<button class="chip ${L.buyin===b?'on':''}" data-fb="${b}">${eurS(b)}</button>`).join('')}</div>
       <div class="frow" style="flex-wrap:wrap"><span class="lbl">Posti</span><button class="chip ${L.seats==='all'?'on':''}" data-fs="all">Tutti</button>${(RULES[curMode].opts||[2,4,6,8,10,12,14,16,18,20]).map(n=>`<button class="chip ${L.seats===n?'on':''}" data-fs="${n}">${n}</button>`).join('')}</div>`}
+      ${curMode==='classic'?'':`<div class="frow" style="flex-wrap:wrap"><span class="lbl">Crediti</span><button class="chip ${L.credits==='all'?'on':''}" data-fcr="all">Tutti</button>${(CRLV[curMode]||[]).map(n=>`<button class="chip ${L.credits===n?'on':''}" data-fcr="${n}">${n}</button>`).join('')}</div>`}
       ${curMode==='turbo'?`<div class="frow"><span class="lbl">Ruoli</span><button class="chip ${L.roles==='all'?'on':''}" data-fr="all">Tutti</button><button class="chip ${L.roles==='classic'?'on':''}" data-fr="classic">Classic</button><button class="chip ${L.roles==='mantra'?'on':''}" data-fr="mantra">Mantra</button></div>`:''}
       <div class="frow"><span class="lbl">Mostra</span><button class="chip ${L.hideFull?'on':''}" data-hide>Solo tavoli con posti liberi</button></div>
     </div>
@@ -1174,11 +1193,12 @@ async function showLobby(mode){
   bindTop(showAste, ()=>openInfo(modeId));
   $app.querySelectorAll('[data-fc]').forEach(b=>b.onclick=()=>{L.call=b.dataset.fc;showLobby()});
   $app.querySelectorAll('[data-fb]').forEach(b=>b.onclick=()=>{L.buyin=b.dataset.fb==='all'?'all':+b.dataset.fb;showLobby()});
+  $app.querySelectorAll('[data-fcr]').forEach(b=>b.onclick=()=>{L.credits=b.dataset.fcr==='all'?'all':+b.dataset.fcr;showLobby()});
   $app.querySelectorAll('[data-fr]').forEach(b=>b.onclick=()=>{L.roles=b.dataset.fr;showLobby()});
   $app.querySelectorAll('[data-fs]').forEach(b=>b.onclick=()=>{L.seats=b.dataset.fs==='all'?'all':+b.dataset.fs;showLobby()});
   $app.querySelector('[data-hide]').onclick=(e)=>{L.hideFull=!L.hideFull;e.currentTarget.classList.toggle('on',L.hideFull);renderRows()};
   document.getElementById('quick').onclick=async()=>{
-    await fetchOpenRooms();
+    await refreshLobby();
     await fetchWallet();
     const bal=WALLET.cents==null?0:WALLET.cents;
     const c=curTables().filter(t=>t.filled<t.max_seats&&(t.buyin_cents||0)<=bal).sort((a,b)=>(b.filled/b.max_seats)-(a.filled/a.max_seats)||(b.buyin_cents||0)-(a.buyin_cents||0));
@@ -1191,10 +1211,10 @@ async function showLobby(mode){
   };
   document.getElementById('mktable').onclick=()=>openCreate(curMode);
   if(document.getElementById('testauc')) document.getElementById('testauc').onclick=()=>openTestAuction(curMode);
-  await fetchOpenRooms(); renderRows();
-  lobbyT=setInterval(async()=>{ await fetchOpenRooms(); renderRows(); },4000);
+  await refreshLobby(); renderRows();
+  lobbyT=setInterval(async()=>{ await refreshLobby(); renderRows(); },4000);
   lobbyChan=sb.channel('lobby').on('postgres_changes',{event:'*',schema:'public',table:'rooms'},()=>{
-    clearTimeout(lobbyDeb); lobbyDeb=setTimeout(async()=>{ await fetchOpenRooms(); renderRows(); },350);
+    clearTimeout(lobbyDeb); lobbyDeb=setTimeout(async()=>{ await refreshLobby(); renderRows(); },350);
   }).subscribe();
 }
 
@@ -1333,7 +1353,7 @@ function renderRows(){
       }
       return html;
     }).join('')+(list.length>L.max?`<button class="btn wide ghost" id="moretb" style="margin:10px 0">Mostra altri (${list.length-L.max})</button>`:'') : `<div class="empty-l">Nessun tavolo aperto. Creane uno e invita gli amici col codice.</div>`);
-  const mt=document.getElementById('moretb'); if(mt) mt.onclick=()=>{ L.max+=40; renderRows(); };
+  const mt=document.getElementById('moretb'); if(mt) mt.onclick=async()=>{ L.max+=40; await lobbyFetch(); renderRows(); };
   el.querySelectorAll('[data-sort]').forEach(b=>b.onclick=()=>{
     const k=b.dataset.sort; if(L.sort===k) L.dir*=-1; else {L.sort=k;L.dir=1}
     renderRows();
